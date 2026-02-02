@@ -48,7 +48,9 @@ def main():
                 
             if user_input.lower() == "/clear":
                 engine.clear_history()
-                ui.console.print("[yellow]History cleared.[/yellow]")
+                ui.console.clear()  # Clear the terminal screen
+                ui.print_welcome()  # Redisplay the welcome header
+                ui.print_status(engine.mode)
                 continue
 
             if user_input.lower() in ["/setup", "setup"]:
