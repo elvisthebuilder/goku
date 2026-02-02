@@ -24,8 +24,8 @@ class GokuEngine:
         headers = {"Content-Type": "application/json"}
         if config.HF_TOKEN:
             headers["Authorization"] = f"Bearer {config.HF_TOKEN}"
-        
-        API_URL = f"https://router.huggingface.co/hf-inference/models/{config.DEFAULT_HF_MODEL}/v1/chat/completions"
+        # New HF Router API (OpenAI-compatible)
+        API_URL = "https://router.huggingface.co/v1/chat/completions"
         
         payload = {
             "model": config.DEFAULT_HF_MODEL,
