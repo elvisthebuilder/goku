@@ -60,15 +60,16 @@ TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "list_files",
-            "description": "Lists all files and folders in a specified directory.",
+            "description": "List files in a directory.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "directory": {
                         "type": "string",
-                        "description": "The directory path to list. Defaults to current directory ('.')."
+                        "description": "Path to directory (default: current)"
                     }
-                }
+                },
+                "required": ["directory"]
             }
         }
     },
@@ -76,13 +77,13 @@ TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Reads the text content of a local file.",
+            "description": "Read content of a file.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "The path to the file to read."
+                        "description": "Path to the file"
                     }
                 },
                 "required": ["file_path"]
@@ -93,13 +94,13 @@ TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "run_command",
-            "description": "Executes a shell command in the terminal. Use this for OS interactions, installing packages, or running scripts. This is a HIGH PRIVILEGE action.",
+            "description": "Execute a shell command.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "The exact shell command to run."
+                        "description": "The command to run"
                     }
                 },
                 "required": ["command"]
@@ -110,10 +111,13 @@ TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "get_os_info",
-            "description": "Returns details about the user's OS, device, and environment (like if it's Termux).",
+            "description": "Get system information.",
             "parameters": {
                 "type": "object",
-                "properties": {}
+                "properties": {
+                    "dummy": {"type": "string", "description": "Unused"}
+                },
+                "required": []
             }
         }
     }

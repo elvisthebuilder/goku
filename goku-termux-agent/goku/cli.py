@@ -125,7 +125,10 @@ def main():
                             with ui.show_loading():
                                 response, error = engine.generate(user_input)
                             if error:
-                                ui.show_error(f"Offline also failed: {error}")
+                                if "binary not found" in str(error):
+                                    ui.show_error(f"Offline support not installed. Run [bold green]goku setup[/bold green] to install.")
+                                else:
+                                    ui.show_error(f"Offline failed: {error}")
                             else:
                                 ui.show_assistant_response(response)
                     continue
