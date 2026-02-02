@@ -76,6 +76,9 @@ class GokuEngine:
                 error_details = f": {error_json.get('error', {}).get('message', str(error_json))}"
             except:
                 error_details = f": {response.text[:200]}"
+            
+            # DEBUG: Print payload to identify schema issues
+            print(f"\n[DEBUG] Failed Payload: {json.dumps(payload, indent=2)}")
             raise Exception(f"Online API error: {e}{error_details}")
         except Exception as e:
             raise Exception(f"Online API error: {str(e)}")
