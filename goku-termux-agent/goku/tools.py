@@ -121,12 +121,20 @@ TOOLS_SCHEMA = [
 
 def execute_tool(name, args, permission_callback=None):
     """Dispatcher for tool execution. The AI will handle confirmations conversationally."""
+    # Handle null or empty args
+    if args is None:
+        args = {}
+    
     if name == "run_command":
         return run_command(args.get("command", ""))
     elif name == "list_files":
-        return list_files(**args)
+        directory = args.get("directory", ".")
+        return list_files(directory=directory)
     elif name == "read_file":
-        return read_file(**args)
+        file_path = args.get("file_path", "")
+        if not file_path:
+            return "Error: file_path is required"
+        return read_file(file_path=file_path)
     elif name == "get_os_info":
         return get_os_info()
     return f"Tool {name} not found."

@@ -41,6 +41,15 @@ class GokuEngine:
             response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.HTTPError as e:
+            # Try to get more details from the error response
+            error_details = ""
+            try:
+                error_json = response.json()
+                error_details = f": {error_json.get('error', {}).get('message', str(error_json))}"
+            except:
+                error_details = f": {response.text[:200]}"
+            raise Exception(f"Online API error: {e}{error_details}")
         except Exception as e:
             raise Exception(f"Online API error: {str(e)}")
 
