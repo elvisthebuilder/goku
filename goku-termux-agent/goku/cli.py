@@ -16,6 +16,20 @@ def main():
         return
 
     ui.print_welcome()
+
+    # Onboarding: Check for token
+    if not config.HF_TOKEN:
+        ui.console.print("[yellow]HuggingFace Token not found![/yellow]")
+        ui.console.print("Goku needs a [bold]Read[/bold] token to use the online mode.")
+        ui.console.print("Get one at: [link=https://huggingface.co/settings/tokens]https://huggingface.co/settings/tokens[/link]\n")
+        new_token = ui.console.input("[bold cyan]Enter your HF Token (or press Enter to skip and use offline mode): [/bold cyan]").strip()
+        if new_token:
+            config.save_token(new_token)
+            config.HF_TOKEN = new_token
+            ui.console.print("[green]Token saved! Online mode activated.[/green]")
+        else:
+            ui.console.print("[bold yellow]Skipping token. Online mode will fail until a token is added via /token.[/bold yellow]")
+
     ui.print_status(engine.mode)
 
     while True:
