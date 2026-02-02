@@ -4,7 +4,7 @@
 
 ## Features
 
-- **Hybrid Mode**: Seamlessly switch between high-performance online models and private offline models.
+- **Hybrid Mode**: Seamlessly switch between high-performance Mistral online and private Qwen offline models.
 - **Rich UI**: Beautiful terminal interface with markdown support and syntax highlighting.
 - **Failover**: Automatically prompts to switch to offline mode if the internet is down.
 - **Persistent History**: Maintain context during your chat session.
@@ -14,7 +14,7 @@
 Run this command in Termux:
 
 ```bash
-git clone https://github.com/elvisthebuilder/goku.git && cd goku && cd goku-termux-agent && bash install.sh
+git clone https://github.com/elvisthebuilder/goku-termux-agent.git && cd goku-termux-agent && bash install.sh
 ```
 
 After installation, just type:
@@ -22,6 +22,16 @@ After installation, just type:
 goku
 ```
 from any folder!
+
+## 🔄 Updating
+
+If you already have Goku installed and want the latest features:
+
+```bash
+cd goku-termux-agent
+git pull
+bash install.sh
+```
 
 To use goku without internet, you need to download the model and build `llama.cpp`:
 
