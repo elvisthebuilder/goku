@@ -10,7 +10,7 @@ BIN_DIR = GOKU_DIR / "bin"
 LLAMA_CPP_BIN = BIN_DIR / "llama-cli"
 
 # Online Configuration
-DEFAULT_HF_MODEL = "microsoft/Phi-3.5-mini-instruct" 
+DEFAULT_HF_MODEL = "meta-llama/Llama-3.2-1B-Instruct" 
 CONFIG_FILE = GOKU_DIR / "config.json"
 
 def load_token():

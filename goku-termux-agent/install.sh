@@ -23,7 +23,10 @@ mkdir -p "$GOKU_DIR"
 cp -r "$SOURCE_DIR/goku" "$GOKU_DIR/"
 cp -r "$SOURCE_DIR/scripts" "$GOKU_DIR/"
 cp "$SOURCE_DIR/requirements.txt" "$GOKU_DIR/"
-echo "$SOURCE_DIR" > "$GOKU_DIR/repo_path"
+
+# Find the actual git root (where .git folder lives)
+GIT_ROOT=$(cd "$SOURCE_DIR" && git rev-parse --show-toplevel 2>/dev/null || echo "$SOURCE_DIR")
+echo "$GIT_ROOT" > "$GOKU_DIR/repo_path"
 
 # Install dependencies
 echo "Installing dependencies..."

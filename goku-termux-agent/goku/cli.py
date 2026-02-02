@@ -60,7 +60,9 @@ def main():
                     repo_dir = os.path.abspath(os.path.join(script_dir, "../../"))
                 
                 if os.path.exists(os.path.join(repo_dir, ".git")):
-                    os.system(f"cd {repo_dir} && git pull && bash install.sh")
+                    # We need to find the install.sh relative to the repo root
+                    # Your project has it in goku-termux-agent/install.sh
+                    os.system(f"cd {repo_dir} && git pull && find . -name install.sh -exec bash {{}} \;")
                     ui.console.print("[green]Update complete! Please restart goku.[/green]")
                 else:
                     ui.show_error(f"Git repository not found at {repo_dir}. Please update manually using git pull.")
