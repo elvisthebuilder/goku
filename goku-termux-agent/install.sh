@@ -26,13 +26,8 @@ cp "$SOURCE_DIR/requirements.txt" "$GOKU_DIR/"
 
 # Install dependencies
 echo "Installing dependencies..."
-if [ -n "$PREFIX" ]; then
-    # In Termux, pkg install is much more reliable for python libs
-    pkg install -y python-requests python-rich
-else
-    # Standard Linux
-    pip install -r "$GOKU_DIR/requirements.txt" --break-system-packages 2>/dev/null || pip install -r "$GOKU_DIR/requirements.txt"
-fi
+# Standard way that works in almost all Termux/Linux environments
+pip install requests rich --break-system-packages 2>/dev/null || pip install requests rich
 
 # Create the goku command
 echo "Creating executable..."
