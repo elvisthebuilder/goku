@@ -49,6 +49,18 @@ def main():
                 ui.console.print("[green]Token saved successfully![/green]")
                 continue
 
+            if user_input.lower() in ["/update", "update"]:
+                ui.console.print("[yellow]Checking for updates...[/yellow]")
+                # We assume the user has the repo cloned in Documents/Dev/goku/goku-termux-agent or similar
+                # For a real user, it would be in the folder they cloned into.
+                # A robust way is to find the directory where the .git folder is relative to this script.
+                script_dir = os.path.dirname(os.path.realpath(__file__))
+                repo_dir = os.path.abspath(os.path.join(script_dir, "../../")) # Up from goku/ package
+                
+                os.system(f"cd {repo_dir} && git pull && bash install.sh")
+                ui.console.print("[green]Update complete! Please restart goku to apply changes.[/green]")
+                break
+
             if user_input.startswith("/mode "):
                 mode = user_input.split(" ")[1].lower()
                 if engine.set_mode(mode):

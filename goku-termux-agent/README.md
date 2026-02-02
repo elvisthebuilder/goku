@@ -23,6 +23,16 @@ goku
 ```
 from any folder!
 
+## 🔄 Updating
+
+If you already have Goku installed and want the latest features:
+
+```bash
+cd goku-termux-agent
+git pull
+bash install.sh
+```
+
 To use goku without internet, you need to download the model and build `llama.cpp`:
 
 ```bash
