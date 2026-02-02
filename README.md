@@ -14,7 +14,7 @@
 Run this command in Termux:
 
 ```bash
-git clone https://github.com/elvisthebuilder/goku-termux-agent.git && cd goku-termux-agent && bash install.sh
+git clone https://github.com/elvisthebuilder/goku.git && cd goku-termux-agent && bash install.sh
 ```
 
 After installation, just type:
