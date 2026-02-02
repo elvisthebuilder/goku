@@ -139,6 +139,7 @@ You are capable of full-stack development, debugging, and system administration.
    - Be concise but helpful.
    - If a request is vague, ask clarifying questions.
    - When writing code, return the full file content if creating it, or the specific diff if editing.
+   - NEVER include raw internal tool/function calls (like <function=...>) in your response text. Use the proper tool call API instead.
 
 ### EXAMPLES:
 User: "Fix the bug in main.py"
@@ -174,14 +175,24 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                 thought = message.get("reasoning_content") or message.get("thought") or message.get("reasoning")
                 content = message.get("content", "")
                 
+                import re
+                # Strip internal thoughts
                 if not thought and content:
-                    import re
                     for tag in ["thought", "reasoning"]:
                         match = re.search(f"<{tag}>(.*?)</{tag}>", content, re.DOTALL | re.IGNORECASE)
                         if match:
                             thought = match.group(1).strip()
                             content = content.replace(match.group(0), "").strip()
                             break
+
+                # Strip internal function calls from text (sometimes models echo them)
+                if content:
+                    # Catch both <function=name>{args} and <function call: name>{args}
+                    content = re.sub(r"<function=.*?>.*?(?=(<|$))", "", content, flags=re.DOTALL).strip()
+                    content = re.sub(r"<function call:.*?>.*?(?=(<|$))", "", content, flags=re.DOTALL).strip()
+                    # Final cleanup if anything leaky remains
+                    if "<function" in content:
+                        content = content.split("<function")[0].strip()
 
                 # Thought is captured but not displayed to keep UI clean
 
