@@ -54,6 +54,49 @@ def get_os_info():
     return json.dumps(info, indent=2)
 
 
+def create_file(file_path, content):
+    """Creates a new file with the given content."""
+    try:
+        path = Path(file_path)
+        if path.exists():
+            return f"Error: File {file_path} already exists. Use edit_file to modify it."
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        return f"File created: {file_path}"
+    except Exception as e:
+        return f"Error creating file: {e}"
+
+def edit_file(file_path, old_text, new_text):
+    """Edits a file by replacing old_text with new_text. Safer than rewriting."""
+    try:
+        path = Path(file_path)
+        if not path.exists():
+            return f"Error: File {file_path} not found."
+        
+        content = path.read_text()
+        if old_text not in content:
+            return f"Error: The target string was not found in {file_path}. Please check exact matching."
+        
+        if content.count(old_text) > 1:
+            return f"Error: The target string appears {content.count(old_text)} times. Match must be unique."
+
+        new_content = content.replace(old_text, new_text)
+        path.write_text(new_content)
+        return f"File edited successfully: {file_path}"
+    except Exception as e:
+        return f"Error editing file: {e}"
+
+def search_code(directory, query):
+    """Recursively searches for a string in text files within a directory."""
+    try:
+        cmd = f"grep -r \"{query}\" \"{directory}\" | head -n 20"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if not result.stdout:
+            return "No matches found."
+        return result.stdout
+    except Exception as e:
+        return f"Error searching code: {e}"
+
 # Define tool schemas for the AI
 TOOLS_SCHEMA = [
     {
@@ -87,6 +130,52 @@ TOOLS_SCHEMA = [
                     }
                 },
                 "required": ["file_path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_file",
+            "description": "Create a new file with content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Absolute path"},
+                    "content": {"type": "string", "description": "File content"}
+                },
+                "required": ["file_path", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": "Edit file by replacing a unique string.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to file"},
+                    "old_text": {"type": "string", "description": "Exact unique string to replace"},
+                    "new_text": {"type": "string", "description": "New replacement string"}
+                },
+                "required": ["file_path", "old_text", "new_text"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_code",
+            "description": "Search code files for a string.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "directory": {"type": "string", "description": "Root directory"},
+                    "query": {"type": "string", "description": "Search term"}
+                },
+                "required": ["directory", "query"]
             }
         }
     },
@@ -130,6 +219,22 @@ def execute_tool(name, args, permission_callback=None):
         args = {}
     
     if name == "run_command":
+        return run_command(args.get("command", ""))
+    elif name == "list_files":
+        directory = args.get("directory", ".")
+        return list_files(directory=directory)
+    elif name == "read_file":
+        file_path = args.get("file_path", "")
+        if not file_path:
+            return "Error: file_path is required"
+        return read_file(file_path=file_path)
+    elif name == "create_file":
+        return create_file(args.get("file_path"), args.get("content"))
+    elif name == "edit_file":
+        return edit_file(args.get("file_path"), args.get("old_text"), args.get("new_text"))
+    elif name == "search_code":
+        return search_code(args.get("directory"), args.get("query"))
+    elif name == "get_os_info":
         return run_command(args.get("command", ""))
     elif name == "list_files":
         directory = args.get("directory", ".")
