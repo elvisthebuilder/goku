@@ -42,14 +42,19 @@ def show_assistant_response(text):
 def get_user_input():
     return console.input("[bold blue]You > [/bold blue]")
 
-def show_loading():
-    return console.status("[bold green]Thinking...")
+from rich.box import ROUNDED
 
-def show_thought(text):
-    if not text.strip():
+def show_loading():
+    return console.status("[bold green]Thinking...", spinner="dots")
+
+def show_thought(status, thought):
+    if not thought.strip():
         return
-    panel = Panel(Markdown(text), title="💭 Thought", border_style="dim", padding=(0, 1))
-    console.print(panel)
+    # Truncate thought if it's too long to prevent screen clutter
+    clean_thought = thought.strip()
+    if len(clean_thought) > 150:
+        clean_thought = clean_thought[:150] + "..."
+    status.update(f"[dim]💭 {clean_thought}[/dim]\n[bold green]Gathering answer...")
 
 def show_tool_execution(tool_name, args):
     console.print(f"[bold cyan]🔧 Tool {tool_name}[/bold cyan] [dim]{json.dumps(args)}[/dim]")

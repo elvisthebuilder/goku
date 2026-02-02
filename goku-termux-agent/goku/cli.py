@@ -108,16 +108,9 @@ def main():
 
             try:
                 with ui.show_loading() as status:
-                    def update_status(msg):
-                        if msg:
-                            status.start()
-                            status.update(f"[bold green]{msg}")
-                        else:
-                            status.stop()
-
                     response, error = engine.generate(
                         user_input, 
-                        status_callback=update_status,
+                        status_obj=status,
                         permission_callback=ui.request_permission
                     )
                 

@@ -62,13 +62,16 @@ class GokuEngine:
         except subprocess.CalledProcessError as e:
             raise Exception(f"Offline error: {e.stderr}")
 
-    SYSTEM_PROMPT = """You are Goku, a high-intelligence CLI Agent for Termux. 
+    SYSTEM_PROMPT = """You are Goku, a friendly and high-intelligence CLI Agent for Termux. 
 Your goal is to assist the user with terminal tasks, file management, and device information.
-Always provide a detailed <thought> process before performing any action. 
-Use your tools (run_command, list_files, read_file, get_os_info) to gather information or perform tasks.
-Be concise but thorough. Always ask for permission via the provided mechanism if a command is destructive."""
 
-    def generate(self, prompt, status_callback=None, permission_callback=None):
+RULES:
+1. TOOL USE: Only use tools if the user's request explicitly requires it. Do NOT use get_os_info or list_files for simple greetings or casual conversation.
+2. THOUGHTS: Always provide a concise <thought> process for yourself.
+3. PERSONALITY: Be helpful, direct, and conversational.
+4. PERMISSIONS: Always use the execute_tool mechanism which asks for user permission for shell commands."""
+
+    def generate(self, prompt, status_obj=None, permission_callback=None):
         try:
             if self.mode == "offline":
                 response = self._get_offline_response(prompt)
@@ -87,13 +90,10 @@ Be concise but thorough. Always ask for permission via the provided mechanism if
                 message = res_json["choices"][0]["message"]
                 
                 # Check for and display thoughts/reasoning
-                # Try multiple possible fields (different providers use different names)
                 thought = message.get("reasoning_content") or message.get("thought") or message.get("reasoning")
                 content = message.get("content", "")
                 
-                # If no specific reasoning field, check for <thought> or <reasoning> tags
                 if not thought and content:
-                    # Look for tags like <thought> or <reasoning>
                     for tag in ["thought", "reasoning"]:
                         match = re.search(f"<{tag}>(.*?)</{tag}>", content, re.DOTALL | re.IGNORECASE)
                         if match:
@@ -101,11 +101,9 @@ Be concise but thorough. Always ask for permission via the provided mechanism if
                             content = content.replace(match.group(0), "").strip()
                             break
 
-                if thought and status_callback:
-                    # Pass the thought back to the UI
+                if thought and status_obj:
                     from . import ui
-                    # We print thought normally since it's a separate block
-                    ui.show_thought(thought)
+                    ui.show_thought(status_obj, thought)
 
                 if "tool_calls" not in message or not message["tool_calls"]:
                     final_text = content.strip()
@@ -120,9 +118,8 @@ Be concise but thorough. Always ask for permission via the provided mechanism if
                     func_args = json.loads(tool_call["function"]["arguments"])
                     
                     from . import ui
-                    # IMPORTANT: Clear status before asking for input/permission
-                    if status_callback:
-                        status_callback(None) 
+                    if status_obj:
+                        status_obj.stop()
                     
                     ui.show_tool_execution(func_name, func_args)
                     
@@ -136,9 +133,9 @@ Be concise but thorough. Always ask for permission via the provided mechanism if
                         "content": result
                     })
                     
-                    # Resume thinking...
-                    if status_callback:
-                        status_callback("Thinking...")
+                    if status_obj:
+                        status_obj.start()
+                        status_obj.update("[bold green]Thinking...")
 
         except Exception as e:
             return None, str(e)
