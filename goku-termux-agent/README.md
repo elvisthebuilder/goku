@@ -4,7 +4,7 @@
 
 ## Features
 
-- **Hybrid Mode**: Seamlessly switch between high-performance online models and private offline models.
+- **Hybrid Mode**: Seamlessly switch between high-performance Mistral online and private Qwen offline models.
 - **Rich UI**: Beautiful terminal interface with markdown support and syntax highlighting.
 - **Failover**: Automatically prompts to switch to offline mode if the internet is down.
 - **Persistent History**: Maintain context during your chat session.

@@ -37,6 +37,18 @@ def main():
                 ui.console.print("[yellow]History cleared.[/yellow]")
                 continue
 
+            if user_input.lower() in ["/setup", "setup"]:
+                ui.console.print("[yellow]Starting offline setup...[/yellow]")
+                os.system(f"bash {config.GOKU_DIR}/scripts/setup_offline.sh")
+                continue
+
+            if user_input.startswith("/token "):
+                token = user_input.split(" ", 1)[1].strip()
+                config.save_token(token)
+                config.HF_TOKEN = token
+                ui.console.print("[green]Token saved successfully![/green]")
+                continue
+
             if user_input.startswith("/mode "):
                 mode = user_input.split(" ")[1].lower()
                 if engine.set_mode(mode):

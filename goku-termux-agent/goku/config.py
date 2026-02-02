@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 
 # Paths
@@ -9,8 +10,24 @@ BIN_DIR = GOKU_DIR / "bin"
 LLAMA_CPP_BIN = BIN_DIR / "llama-cli"
 
 # Online Configuration
-DEFAULT_HF_MODEL = "Qwen/Qwen2.5-1.5B-Instruct" 
-HF_TOKEN = os.getenv("HF_TOKEN")
+DEFAULT_HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.2" 
+CONFIG_FILE = GOKU_DIR / "config.json"
+
+def load_token():
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f).get("hf_token")
+        except:
+            pass
+    return os.getenv("HF_TOKEN")
+
+def save_token(token):
+    GOKU_DIR.mkdir(parents=True, exist_ok=True)
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump({"hf_token": token}, f)
+
+HF_TOKEN = load_token()
 
 # Offline Configuration
 DEFAULT_GGUF_MODEL = "Qwen2.5-1.5B-Instruct-GGUF"

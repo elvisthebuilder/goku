@@ -20,6 +20,7 @@ class GokuEngine:
 
     def _get_online_response(self, prompt):
         headers = {}
+        # Always reload from config in case it was updated via /token
         if config.HF_TOKEN:
             headers["Authorization"] = f"Bearer {config.HF_TOKEN}"
         
