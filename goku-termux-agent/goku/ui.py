@@ -40,28 +40,53 @@ def show_assistant_response(text):
     console.print(Panel(md, title="Goku", border_style="green"))
 
 def get_user_input():
-    return console.input("[bold blue]You > [/bold blue]")
+    # Use Prompt which prevents editing the prefix
+    from rich.prompt import Prompt
+    return Prompt.ask("[bold blue]You[/bold blue]")
 
 from rich.box import ROUNDED
+from rich.columns import Columns
+
+# Store the last thought to display it as a collapsible panel
+last_thought = {"text": "", "shown": False}
 
 def show_loading():
     return console.status("[bold green]Thinking...", spinner="dots")
 
 def show_thought(status, thought):
+    """Display thought in the status temporarily, and save it for later permanent display"""
+    global last_thought
     if not thought.strip():
         return
-    # Truncate thought if it's too long to prevent screen clutter
+    # Truncate thought if it's too long for status line
     clean_thought = thought.strip()
-    if len(clean_thought) > 150:
-        clean_thought = clean_thought[:150] + "..."
-    status.update(f"[dim]💭 {clean_thought}[/dim]\n[bold green]Gathering answer...")
+    display_thought = clean_thought[:100] + "..." if len(clean_thought) > 100 else clean_thought
+    status.update(f"[dim]💭 {display_thought}[/dim]\n[bold green]Formulating response...")
+    
+    # Save full thought for display after response
+    last_thought = {"text": clean_thought, "shown": False}
+
+def show_thought_panel():
+    """Display the saved thought as a collapsible panel after the response"""
+    global last_thought
+    if last_thought["text"] and not last_thought["shown"]:
+        # Create a collapsible-looking panel
+        thought_text = last_thought["text"]
+        console.print(Panel(
+            f"[dim]{thought_text}[/dim]",
+            title="💭 Thought Process",
+            border_style="dim",
+            padding=(0, 1),
+            expand=False
+        ))
+        last_thought["shown"] = True
 
 def show_tool_execution(tool_name, args):
-    console.print(f"[bold cyan]🔧 Tool {tool_name}[/bold cyan] [dim]{json.dumps(args)}[/dim]")
+    console.print(f"[bold cyan]🔧 Executing: {tool_name}[/bold cyan] [dim]{json.dumps(args)}[/dim]")
 
 
 def request_permission(command):
     # Stop any active status while asking for permission
-    console.print(Panel(f"[bold red]⚠️ DANGEROUS COMMAND DETECTED[/bold red]\n\n[yellow]{command}[/yellow]", border_style="red"))
+    console.print(Panel(f"[bold red]⚠️ COMMAND REQUIRES PERMISSION[/bold red]\n\n[yellow]{command}[/yellow]", border_style="red"))
     choice = console.input("[bold white]Allow this command? (y/n): [/bold white]").lower()
     return choice == 'y'

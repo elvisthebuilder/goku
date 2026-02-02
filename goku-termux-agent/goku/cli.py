@@ -129,6 +129,7 @@ def main():
                     continue
                 
                 ui.show_assistant_response(response)
+                ui.show_thought_panel()  # Display collapsible thought after response
             except KeyboardInterrupt:
                 ui.console.print("\n[bold red]── Action Aborted by User ──[/bold red]")
                 continue

@@ -41,6 +41,7 @@ def run_command(command):
 def get_os_info():
     """Returns basic information about the user's OS and device."""
     import platform
+    import json
     info = {
         "system": platform.system(),
         "node": platform.node(),
