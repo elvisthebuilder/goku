@@ -19,31 +19,36 @@ class GokuEngine:
         self.history = []
 
     def _get_online_response(self, prompt):
-        headers = {}
+        headers = {"Content-Type": "application/json"}
         # Always reload from config in case it was updated via /token
         if config.HF_TOKEN:
             headers["Authorization"] = f"Bearer {config.HF_TOKEN}"
         
-        # Simple HF Inference API call
-        API_URL = f"https://api-inference.huggingface.co/models/{config.DEFAULT_HF_MODEL}"
+        # New HF Router API (OpenAI-compatible)
+        API_URL = f"https://router.huggingface.co/hf-inference/models/{config.DEFAULT_HF_MODEL}/v1/chat/completions"
         
-        # Build prompt with history
-        full_prompt = ""
+        # Build messages list from history
+        messages = []
         for msg in self.history[-config.SESSION_MEMORY_MAX:]:
-            full_prompt += f"{msg['role']}: {msg['content']}\n"
-        full_prompt += f"user: {prompt}\nassistant:"
+            messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": config.DEFAULT_HF_MODEL,
+            "messages": messages,
+            "max_tokens": 512,
+            "stream": False
+        }
 
         try:
-            response = requests.post(API_URL, headers=headers, json={"inputs": full_prompt, "parameters": {"max_new_tokens": 256}}, timeout=10)
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=15)
             response.raise_for_status()
             res_json = response.json()
-            if isinstance(res_json, list) and len(res_json) > 0:
-                text = res_json[0].get("generated_text", "")
-                # Extract only the newly generated part if it includes the prompt
-                if "assistant:" in text:
-                    return text.split("assistant:")[-1].strip()
-                return text.strip()
-            return "Unexpected response from HF API."
+            
+            if "choices" in res_json and len(res_json["choices"]) > 0:
+                return res_json["choices"][0]["message"]["content"].strip()
+            
+            return "Unexpected response format from HF Router API."
         except Exception as e:
             raise Exception(f"Online error: {str(e)}")
 
