@@ -97,8 +97,39 @@ def search_code(directory, query):
     except Exception as e:
         return f"Error searching code: {e}"
 
+def search_web(query):
+    """Searches the web using DuckDuckGo."""
+    try:
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=5))
+            if not results:
+                return "No results found."
+            formatted = []
+            for r in results:
+                formatted.append(f"Title: {r['title']}\nLink: {r['href']}\nSnippet: {r['body']}\n---")
+            return "\n".join(formatted)
+    except ImportError:
+        return "Error: duckduckgo-search not installed. Run 'pip install duckduckgo-search'."
+    except Exception as e:
+        return f"Error searching web: {e}"
+
 # Define tool schemas for the AI
 TOOLS_SCHEMA = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": "Search the web for information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
     {
         "type": "function",
         "function": {
@@ -234,6 +265,8 @@ def execute_tool(name, args, permission_callback=None):
         return edit_file(args.get("file_path"), args.get("old_text"), args.get("new_text"))
     elif name == "search_code":
         return search_code(args.get("directory"), args.get("query"))
+    elif name == "search_web":
+        return search_web(args.get("query"))
     elif name == "get_os_info":
         return run_command(args.get("command", ""))
     elif name == "list_files":
