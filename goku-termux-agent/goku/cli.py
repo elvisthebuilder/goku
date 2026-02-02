@@ -106,36 +106,40 @@ def main():
                     ui.show_error("Could not find previous query.")
                     continue
 
-            with ui.show_loading() as status:
-                def update_status(msg):
-                    if msg:
-                        status.start()
-                        status.update(f"[bold green]{msg}")
-                    else:
-                        status.stop()
-
-                response, error = engine.generate(
-                    user_input, 
-                    status_callback=update_status,
-                    permission_callback=ui.request_permission
-                )
-            
-            if error:
-                ui.show_error(error)
-                if engine.mode == "online":
-                    choice = ui.console.input("[bold yellow]Online failed. Switch to offline? (y/n): [/bold yellow]").lower()
-                    if choice == 'y':
-                        engine.set_mode("offline")
-                        # Retry automatically
-                        with ui.show_loading():
-                            response, error = engine.generate(user_input)
-                        if error:
-                            ui.show_error(f"Offline also failed: {error}")
+            try:
+                with ui.show_loading() as status:
+                    def update_status(msg):
+                        if msg:
+                            status.start()
+                            status.update(f"[bold green]{msg}")
                         else:
-                            ui.show_assistant_response(response)
+                            status.stop()
+
+                    response, error = engine.generate(
+                        user_input, 
+                        status_callback=update_status,
+                        permission_callback=ui.request_permission
+                    )
+                
+                if error:
+                    ui.show_error(error)
+                    if engine.mode == "online":
+                        choice = ui.console.input("[bold yellow]Online failed. Switch to offline? (y/n): [/bold yellow]").lower()
+                        if choice == 'y':
+                            engine.set_mode("offline")
+                            # Retry automatically
+                            with ui.show_loading():
+                                response, error = engine.generate(user_input)
+                            if error:
+                                ui.show_error(f"Offline also failed: {error}")
+                            else:
+                                ui.show_assistant_response(response)
+                    continue
+                
+                ui.show_assistant_response(response)
+            except KeyboardInterrupt:
+                ui.console.print("\n[bold red]── Action Aborted by User ──[/bold red]")
                 continue
-            
-            ui.show_assistant_response(response)
 
         except KeyboardInterrupt:
             print("\nExiting...")
