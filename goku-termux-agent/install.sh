@@ -32,7 +32,8 @@ echo "$GIT_ROOT" > "$GOKU_DIR/repo_path"
 echo "Installing dependencies..."
 if [ -n "$PREFIX" ]; then
     # In Termux, we try multiple names as mirrors vary
-    pkg install -y python-requests python-rich 2>/dev/null
+    # Rust/clang needed for building pydantic-core if wheel is missing
+    pkg install -y python-requests python-rich rust binutils clang make 2>/dev/null
     pip install requests rich mcp duckduckgo-search --break-system-packages 2>/dev/null
 else
     # Standard Linux
