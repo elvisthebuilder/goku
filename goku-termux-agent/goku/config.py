@@ -29,6 +29,57 @@ def save_token(token):
 
 HF_TOKEN = load_token()
 
+def load_mcp_servers():
+    """Load MCP server configurations."""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                data = json.load(f)
+                return data.get("mcp_servers", {})
+        except:
+            pass
+    return {}
+
+def save_mcp_server(name, config):
+    """Save a new MCP server configuration."""
+    GOKU_DIR.mkdir(parents=True, exist_ok=True)
+    current_data = {}
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                current_data = json.load(f)
+        except:
+            pass
+    
+    servers = current_data.get("mcp_servers", {})
+    servers[name] = config
+    current_data["mcp_servers"] = servers
+    
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(current_data, f, indent=4)
+
+def remove_mcp_server(name):
+    """Remove an MCP server configuration."""
+    if not CONFIG_FILE.exists():
+        return False
+        
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            current_data = json.load(f)
+    except:
+        return False
+        
+    servers = current_data.get("mcp_servers", {})
+    if name in servers:
+        del servers[name]
+        current_data["mcp_servers"] = servers
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(current_data, f, indent=4)
+        return True
+    return False
+
+MCP_SERVERS = load_mcp_servers()
+
 # Offline Configuration
 DEFAULT_GGUF_MODEL = "Qwen2.5-1.5B-Instruct-GGUF"
 MODEL_URL = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"

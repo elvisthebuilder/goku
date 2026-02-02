@@ -15,6 +15,11 @@ def main():
         os.system("bash ~/.goku/scripts/setup_offline.sh")
         return
 
+    # Initialize MCP
+    ui.console.print("[dim]Initializing tools...[/dim]")
+    import asyncio
+    asyncio.run(engine.initialize_mcp())
+
     ui.print_welcome()
 
     # Onboarding: Check for token
@@ -44,6 +49,28 @@ def main():
             
             if user_input.lower() == "/help":
                 ui.print_help()
+                continue
+            
+            # MCP Commands
+            if user_input.startswith("/mcp"):
+                parts = user_input.split(" ")
+                if len(parts) > 1:
+                    cmd = parts[1]
+                    if cmd == "list":
+                        if not engine.mcp_clients:
+                            ui.console.print("No MCP servers connected.")
+                        else:
+                            ui.console.print("[bold]Connected MCP Servers:[/bold]")
+                            for name in engine.mcp_clients:
+                                ui.console.print(f" - {name}")
+                            ui.console.print(f"\n[dim]{len(engine.mcp_tools)} tools available loaded.[/dim]")
+                    elif cmd == "reload":
+                        asyncio.run(engine.initialize_mcp())
+                        ui.console.print("[green]MCP servers reloaded.[/green]")
+                    else:
+                        ui.console.print("Usage: /mcp [list|reload]")
+                else:
+                    ui.console.print("Usage: /mcp [list|reload]")
                 continue
                 
             if user_input.lower() == "/clear":

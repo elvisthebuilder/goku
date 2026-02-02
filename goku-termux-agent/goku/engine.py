@@ -7,10 +7,28 @@ from . import config
 
 from . import tools as goku_tools
 
+from . import mcp_client
+import asyncio
+
 class GokuEngine:
     def __init__(self):
         self.mode = "online"
         self.history = []
+        self.mcp_clients = {}
+        self.mcp_tools = []
+        
+        # Initialize MCP clients
+        for name, cfg in config.MCP_SERVERS.items():
+            client = mcp_client.MCPClient(name, cfg.get("command"), cfg.get("args", []), cfg.get("env"))
+            self.mcp_clients[name] = client
+
+    async def initialize_mcp(self):
+        """Connect to MCP servers and fetch tools."""
+        for name, client in self.mcp_clients.items():
+            if await client.connect():
+                tools = await client.list_tools_schema()
+                self.mcp_tools.extend(tools)
+                # ui.console.print(f"[dim]Connected to MCP server: {name}[/dim]")
 
     def set_mode(self, mode):
         if mode in ["online", "offline"]:
@@ -28,11 +46,14 @@ class GokuEngine:
         # New HF Router API (OpenAI-compatible)
         API_URL = "https://router.huggingface.co/v1/chat/completions"
         
+        # Merge native tools with MCP tools
+        all_tools = goku_tools.TOOLS_SCHEMA + self.mcp_tools
+        
         payload = {
             "model": config.DEFAULT_HF_MODEL,
             "messages": messages,
             "max_tokens": 1024,
-            "tools": goku_tools.TOOLS_SCHEMA,
+            "tools": all_tools,
             "tool_choice": "auto",
             "stream": False
         }
@@ -64,7 +85,14 @@ class GokuEngine:
              full_prompt += f"<|im_start|>{msg['role']}\n{msg['content']}<|im_end|>\n"
         full_prompt += f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
 
-        cmd = [str(config.LLAMA_CPP_BIN), "-m", str(config.MODEL_PATH), "-p", full_prompt, "-n", "256", "--quiet", "--no-display-prompt"]
+        cmd = [
+            str(config.LLAMA_CPP_BIN),
+            "-m", str(config.MODEL_PATH),
+            "-p", f"{self.SYSTEM_PROMPT}\nUser: {prompt}\nAssistant:",
+            "-n", "512",
+            "--ctx-size", "2048"
+        ]
+        
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             return result.stdout.strip()
@@ -86,6 +114,7 @@ User: "who are you?" → You: "I'm Goku, your AI assistant. I can help with file
 - `read_file(file_path)` - Read files
 - `run_command(command)` - Execute terminal commands
 - `get_os_info()` - Check system info
+- Plus any connected MCP tools (use them when relevant!)
 
 ### CRITICAL RULES:
 
@@ -107,10 +136,13 @@ User: "who are you?" → You: "I'm Goku, your AI assistant. I can help with file
    - Don't mention function names like `get_os_info` in casual chat
    - Sound human, not like a manual"""
 
-    def generate(self, prompt, status_obj=None):
+    async def generate_async(self, prompt, status_obj=None):
+        """Async version of generate to support MCP."""
         try:
             if self.mode == "offline":
-                response = self._get_offline_response(prompt)
+                # Wrap synchronous offline call
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(None, self._get_offline_response, prompt)
                 self.history.append({"role": "user", "content": prompt})
                 self.history.append({"role": "assistant", "content": response})
                 return response, None
@@ -122,7 +154,10 @@ User: "who are you?" → You: "I'm Goku, your AI assistant. I can help with file
             current_messages.append({"role": "user", "content": prompt})
 
             while True:
-                res_json = self._get_online_response(current_messages)
+                # Wrap synchronous request
+                loop = asyncio.get_event_loop()
+                res_json = await loop.run_in_executor(None, self._get_online_response, current_messages)
+                
                 message = res_json["choices"][0]["message"]
                 
                 # Check for and display thoughts/reasoning
@@ -130,6 +165,7 @@ User: "who are you?" → You: "I'm Goku, your AI assistant. I can help with file
                 content = message.get("content", "")
                 
                 if not thought and content:
+                    import re
                     for tag in ["thought", "reasoning"]:
                         match = re.search(f"<{tag}>(.*?)</{tag}>", content, re.DOTALL | re.IGNORECASE)
                         if match:
@@ -157,8 +193,17 @@ User: "who are you?" → You: "I'm Goku, your AI assistant. I can help with file
                     
                     ui.show_tool_execution(func_name, func_args)
                     
-                    # Execute tool - AI handles confirmations conversationally
-                    result = goku_tools.execute_tool(func_name, func_args)
+                    # Execute tool - check if it's native or MCP
+                    if "__" in func_name:
+                        # MCP Tool (server__tool)
+                        server_name = func_name.split("__")[0]
+                        if server_name in self.mcp_clients:
+                            result = await self.mcp_clients[server_name].call_tool(func_name, func_args)
+                        else:
+                            result = f"Error: MCP server '{server_name}' not found."
+                    else:
+                        # Native tool
+                        result = goku_tools.execute_tool(func_name, func_args)
                     
                     current_messages.append({
                         "role": "tool",
@@ -173,3 +218,7 @@ User: "who are you?" → You: "I'm Goku, your AI assistant. I can help with file
 
         except Exception as e:
             return None, str(e)
+
+    def generate(self, prompt, status_obj=None):
+        """Wrapper to run async generate in sync context if needed, but CLI should be async."""
+        return asyncio.run(self.generate_async(prompt, status_obj))
