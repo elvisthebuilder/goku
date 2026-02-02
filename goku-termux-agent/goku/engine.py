@@ -5,9 +5,12 @@ import os
 import re
 from . import config
 
-from . import tools as goku_tools
-
-from . import mcp_client
+try:
+    from . import mcp_client
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
+    
 import asyncio
 
 class GokuEngine:
@@ -17,10 +20,12 @@ class GokuEngine:
         self.mcp_clients = {}
         self.mcp_tools = []
         
-        # Initialize MCP clients
-        for name, cfg in config.MCP_SERVERS.items():
-            client = mcp_client.MCPClient(name, cfg.get("command"), cfg.get("args", []), cfg.get("env"))
-            self.mcp_clients[name] = client
+        # Initialize MCP clients if available
+        if MCP_AVAILABLE:
+            for name, cfg in config.MCP_SERVERS.items():
+                if hasattr(mcp_client, 'MCPClient'):
+                    client = mcp_client.MCPClient(name, cfg.get("command"), cfg.get("args", []), cfg.get("env"))
+                    self.mcp_clients[name] = client
 
     async def initialize_mcp(self):
         """Connect to MCP servers and fetch tools."""
