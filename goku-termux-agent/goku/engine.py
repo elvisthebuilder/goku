@@ -193,6 +193,9 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                     # Final cleanup if anything leaky remains
                     if "<function" in content:
                         content = content.split("<function")[0].strip()
+                
+                # IMPORTANT: Sync cleaned content back to message object so history is clean
+                message["content"] = content
 
                 # Thought is captured but not displayed to keep UI clean
 

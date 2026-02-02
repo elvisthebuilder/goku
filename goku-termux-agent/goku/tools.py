@@ -252,13 +252,9 @@ def execute_tool(name, args, permission_callback=None):
     if name == "run_command":
         return run_command(args.get("command", ""))
     elif name == "list_files":
-        directory = args.get("directory", ".")
-        return list_files(directory=directory)
+        return list_files(args.get("directory", "."))
     elif name == "read_file":
-        file_path = args.get("file_path", "")
-        if not file_path:
-            return "Error: file_path is required"
-        return read_file(file_path=file_path)
+        return read_file(args.get("file_path", ""))
     elif name == "create_file":
         return create_file(args.get("file_path"), args.get("content"))
     elif name == "edit_file":
@@ -267,16 +263,6 @@ def execute_tool(name, args, permission_callback=None):
         return search_code(args.get("directory"), args.get("query"))
     elif name == "search_web":
         return search_web(args.get("query"))
-    elif name == "get_os_info":
-        return run_command(args.get("command", ""))
-    elif name == "list_files":
-        directory = args.get("directory", ".")
-        return list_files(directory=directory)
-    elif name == "read_file":
-        file_path = args.get("file_path", "")
-        if not file_path:
-            return "Error: file_path is required"
-        return read_file(file_path=file_path)
     elif name == "get_os_info":
         return get_os_info()
     return f"Tool {name} not found."
