@@ -59,9 +59,8 @@ class GokuEngine:
         payload = {
             "model": config.DEFAULT_HF_MODEL,
             "messages": messages,
-            "max_tokens": 1024,
+            "max_tokens": 2048,
             "tools": all_tools,
-            "tool_choice": "auto",
             "stream": False
         }
 
@@ -195,18 +194,25 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                         content = content.split("<function")[0].strip()
                 
                 # IMPORTANT: Sync cleaned content back to message object so history is clean
-                message["content"] = content
-
-                # Thought is captured but not displayed to keep UI clean
-
+                # Use None for empty content with tool calls (cleaner for API)
+                message["content"] = content if content else None
+                
+                # Clean message to only standard fields before appending
+                clean_msg = {
+                    "role": "assistant",
+                    "content": message["content"]
+                }
+                if "tool_calls" in message:
+                    clean_msg["tool_calls"] = message["tool_calls"]
+                
+                # Handle tool calls
                 if "tool_calls" not in message or not message["tool_calls"]:
                     final_text = content.strip()
                     self.history.append({"role": "user", "content": prompt})
                     self.history.append({"role": "assistant", "content": final_text})
                     return final_text, None
 
-                # Handle tool calls
-                current_messages.append(message)
+                current_messages.append(clean_msg)
                 for tool_call in message["tool_calls"]:
                     func_name = tool_call["function"]["name"]
                     func_args = json.loads(tool_call["function"]["arguments"])

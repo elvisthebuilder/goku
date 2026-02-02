@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Goku Termux Agent Installer
-SOURCE_DIR=$(pwd)
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOKU_DIR="$HOME/.goku"
 
 # Detect bin directory

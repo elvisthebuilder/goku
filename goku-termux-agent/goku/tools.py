@@ -234,11 +234,9 @@ TOOLS_SCHEMA = [
             "description": "Get system information.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "dummy": {"type": "string", "description": "Unused"}
-                },
-                "required": []
-            }
+                "properties": {}
+            },
+            "required": []
         }
     }
 ]
