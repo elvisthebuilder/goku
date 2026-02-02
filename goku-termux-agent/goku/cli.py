@@ -110,8 +110,7 @@ def main():
                 with ui.show_loading() as status:
                     response, error = engine.generate(
                         user_input, 
-                        status_obj=status,
-                        permission_callback=ui.request_permission
+                        status_obj=status
                     )
                 
                 if error:
