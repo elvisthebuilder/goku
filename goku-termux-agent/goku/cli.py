@@ -107,9 +107,16 @@ def main():
                     continue
 
             with ui.show_loading() as status:
+                def update_status(msg):
+                    if msg:
+                        status.start()
+                        status.update(f"[bold green]{msg}")
+                    else:
+                        status.stop()
+
                 response, error = engine.generate(
                     user_input, 
-                    status_callback=lambda m: status.update(f"[bold green]{m}"),
+                    status_callback=update_status,
                     permission_callback=ui.request_permission
                 )
             

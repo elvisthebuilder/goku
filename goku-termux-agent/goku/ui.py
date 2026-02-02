@@ -5,6 +5,7 @@ from rich.text import Text
 from rich.live import Live
 from rich.status import Status
 
+import json
 console = Console()
 
 def print_welcome():
@@ -53,9 +54,9 @@ def show_thought(text):
 def show_tool_execution(tool_name, args):
     console.print(f"[bold cyan]🔧 Tool {tool_name}[/bold cyan] [dim]{json.dumps(args)}[/dim]")
 
+
 def request_permission(command):
+    # Stop any active status while asking for permission
     console.print(Panel(f"[bold red]⚠️ DANGEROUS COMMAND DETECTED[/bold red]\n\n[yellow]{command}[/yellow]", border_style="red"))
     choice = console.input("[bold white]Allow this command? (y/n): [/bold white]").lower()
     return choice == 'y'
-
-import json
