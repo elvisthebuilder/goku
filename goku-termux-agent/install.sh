@@ -33,10 +33,10 @@ echo "Installing dependencies..."
 if [ -n "$PREFIX" ]; then
     # In Termux, we try multiple names as mirrors vary
     pkg install -y python-requests python-rich 2>/dev/null
-    pip install requests rich mcp --break-system-packages 2>/dev/null
+    pip install requests rich mcp duckduckgo-search --break-system-packages 2>/dev/null
 else
     # Standard Linux
-    pip install requests rich mcp --break-system-packages 2>/dev/null || pip install requests rich mcp
+    pip install requests rich mcp duckduckgo-search --break-system-packages 2>/dev/null || pip install requests rich mcp duckduckgo-search
 fi
 
 # Create the goku command

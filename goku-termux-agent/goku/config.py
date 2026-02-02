@@ -31,14 +31,25 @@ HF_TOKEN = load_token()
 
 def load_mcp_servers():
     """Load MCP server configurations."""
+    defaults = {
+        "internet": {
+            "command": "python3",
+            "args": [os.path.join(str(GOKU_DIR), "goku/servers/internet.py")],
+            "env": {"PYTHONPATH": str(GOKU_DIR)}
+        }
+    }
+    
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 data = json.load(f)
-                return data.get("mcp_servers", {})
+                servers = data.get("mcp_servers", {})
+                if not servers:
+                    return defaults
+                return servers
         except:
             pass
-    return {}
+    return defaults
 
 def save_mcp_server(name, config):
     """Save a new MCP server configuration."""
