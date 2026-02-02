@@ -196,8 +196,11 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                         content = content.split("<function")[0].strip()
                 
                 # IMPORTANT: Sync cleaned content back to message object so history is clean
-                # Use empty string instead of None (more compatible)
-                message["content"] = content if content else ""
+                # Use None for empty content with tool calls (cleaner for API, e.g., vLLM/TGI)
+                if "tool_calls" in message and message["tool_calls"]:
+                     message["content"] = None 
+                else:
+                     message["content"] = content if content else ""
                 
                 # Standardize assistant message for history
                 clean_msg = {
@@ -206,7 +209,13 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                 }
                 if "tool_calls" in message:
                     clean_msg["tool_calls"] = message["tool_calls"]
-                
+                    # Fix malformed arguments in history (some models emit "null" or None)
+                    for tc in clean_msg["tool_calls"]:
+                         if "function" in tc:
+                              args = tc["function"].get("arguments")
+                              if args is None or args == "null":
+                                   tc["function"]["arguments"] = "{}"
+
                 if not message.get("tool_calls"):
                     final_text = content.strip() if content else ""
                     # Record the full turn in history
