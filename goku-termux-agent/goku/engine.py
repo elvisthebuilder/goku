@@ -71,11 +71,12 @@ class GokuEngine:
 - `get_os_info()`: Check device/OS details.
 
 ### CRITICAL RULES:
-1. **DONT CALL TOOLS TO LIST THEM**: If the user asks what you can do, EXPLAIN it using text. Do NOT execute the tools as a demonstration.
-2. **NO PROACTIVE GREETINGS**: Do not use tools for "hi", "hello", etc. Respond with text ONLY.
-3. **TASK ORIENTED**: Only use a tool if it is strictly required to fulfill a specific request (e.g. "Create a file named x").
-4. **THOUGHTS**: Provide a brief <thought> clarifying if a tool is needed.
-5. **SECURITY**: Non-safe commands (mkdir, rm, etc.) trigger a prompt. Safe commands (ls, pwd) run automatically."""
+1. **GENERAL KNOWLEDGE FIRST**: If the user asks a question about what a command means (e.g. "What does pwd mean?") or general info, ANSWER with your internal knowledge. Do NOT use tools for simple explanations.
+2. **DONT CALL TOOLS TO LIST THEM**: If the user asks what you can do, EXPLAIN it using text. Do NOT execute the tools as a demonstration.
+3. **NO PROACTIVE GREETINGS**: Do not use tools for "hi", "hello", etc. Respond with text ONLY.
+4. **TASK ORIENTED**: Only use a tool if it is strictly required to fulfill a specific request (e.g. "Create a file named x").
+5. **THOUGHTS**: Provide a brief <thought> clarifying if a tool is needed.
+6. **SECURITY**: Non-safe commands (mkdir, rm, etc.) trigger a prompt. Safe commands (ls, pwd) run automatically."""
 
     def generate(self, prompt, status_obj=None, permission_callback=None):
         try:
