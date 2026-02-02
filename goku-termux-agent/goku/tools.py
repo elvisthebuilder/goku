@@ -118,13 +118,21 @@ TOOLS_SCHEMA = [
     }
 ]
 
+SAFE_COMMANDS = ["ls", "pwd", "whoami", "uname", "date", "uptime", "free", "df", "echo", "cat", "grep", "find", "pkg list-installed"]
+
+def is_command_safe(command):
+    """Checks if a command is in the safe whitelist."""
+    cmd_base = command.split()[0] if command.strip() else ""
+    return cmd_base in SAFE_COMMANDS
+
 def execute_tool(name, args, permission_callback=None):
-    """Dispatcher for tool execution with optional permission check."""
+    """Dispatcher for tool execution with optional permission check for unsafe commands."""
     if name == "run_command":
-        if permission_callback:
-            if not permission_callback(args.get("command")):
+        cmd = args.get("command", "")
+        if not is_command_safe(cmd) and permission_callback:
+            if not permission_callback(cmd):
                 return "Operation cancelled by user."
-        return run_command(**args)
+        return run_command(cmd)
     elif name == "list_files":
         return list_files(**args)
     elif name == "read_file":
