@@ -16,10 +16,13 @@ def print_help():
     [bold yellow]Available Commands:[/bold yellow]
     - [cyan]/mode online[/cyan]  : Switch to Online mode (HF API)
     - [cyan]/mode offline[/cyan] : Switch to Offline mode (llama.cpp)
-    - [cyan]/clear[/cyan]        : Clear session history
-    - [cyan]/retry[/cyan]        : Retry the last generation
-    - [cyan]/exit[/cyan]         : Quit goku
-    - [cyan]/help[/cyan]         : Show this help message
+    - [cyan]/token <key>[/cyan]   : Save your HuggingFace API Token
+    - [cyan]/setup[/cyan]         : Install offline support (llama.cpp)
+    - [cyan]/update[/cyan]        : Update Goku to the latest version
+    - [cyan]/clear[/cyan]         : Clear session history
+    - [cyan]/retry[/cyan]         : Retry the last generation
+    - [cyan]/exit[/cyan]          : Quit goku
+    - [cyan]/help[/cyan]          : Show this help message
     """
     console.print(help_text)
 
