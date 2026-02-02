@@ -51,14 +51,19 @@ def main():
 
             if user_input.lower() in ["/update", "update"]:
                 ui.console.print("[yellow]Checking for updates...[/yellow]")
-                # We assume the user has the repo cloned in Documents/Dev/goku/goku-termux-agent or similar
-                # For a real user, it would be in the folder they cloned into.
-                # A robust way is to find the directory where the .git folder is relative to this script.
-                script_dir = os.path.dirname(os.path.realpath(__file__))
-                repo_dir = os.path.abspath(os.path.join(script_dir, "../../")) # Up from goku/ package
                 
-                os.system(f"cd {repo_dir} && git pull && bash install.sh")
-                ui.console.print("[green]Update complete! Please restart goku to apply changes.[/green]")
+                repo_path_file = config.GOKU_DIR / "repo_path"
+                if repo_path_file.exists():
+                    repo_dir = repo_path_file.read_text().strip()
+                else:
+                    script_dir = os.path.dirname(os.path.realpath(__file__))
+                    repo_dir = os.path.abspath(os.path.join(script_dir, "../../"))
+                
+                if os.path.exists(os.path.join(repo_dir, ".git")):
+                    os.system(f"cd {repo_dir} && git pull && bash install.sh")
+                    ui.console.print("[green]Update complete! Please restart goku.[/green]")
+                else:
+                    ui.show_error(f"Git repository not found at {repo_dir}. Please update manually using git pull.")
                 break
 
             if user_input.startswith("/mode "):

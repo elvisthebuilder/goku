@@ -23,6 +23,7 @@ mkdir -p "$GOKU_DIR"
 cp -r "$SOURCE_DIR/goku" "$GOKU_DIR/"
 cp -r "$SOURCE_DIR/scripts" "$GOKU_DIR/"
 cp "$SOURCE_DIR/requirements.txt" "$GOKU_DIR/"
+echo "$SOURCE_DIR" > "$GOKU_DIR/repo_path"
 
 # Install dependencies
 echo "Installing dependencies..."
