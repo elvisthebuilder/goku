@@ -96,10 +96,7 @@ User: "who are you?" → You: "I'm Goku, your AI assistant. I can help with file
 **3. Keep responses brief and natural**
    - Don't list all your capabilities unless asked
    - Don't mention function names like `get_os_info` in casual chat
-   - Sound human, not like a manual
-
-### THOUGHTS:
-Add a brief <thought> about your reasoning."""
+   - Sound human, not like a manual"""
 
     def generate(self, prompt, status_obj=None):
         try:
@@ -131,9 +128,7 @@ Add a brief <thought> about your reasoning."""
                             content = content.replace(match.group(0), "").strip()
                             break
 
-                if thought and status_obj:
-                    from . import ui
-                    ui.show_thought(status_obj, thought)
+                # Thought is captured but not displayed to keep UI clean
 
                 if "tool_calls" not in message or not message["tool_calls"]:
                     final_text = content.strip()
