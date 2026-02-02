@@ -158,13 +158,15 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                 return response, None
 
             # Online Agentic Loop
+            # Prepare initial messages with the system prompt
             current_messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
+            # Limit history to prevent context overflow and reduce costs
             for msg in self.history[-config.SESSION_MEMORY_MAX:]:
                 current_messages.append(msg)
             current_messages.append({"role": "user", "content": prompt})
 
             while True:
-                # Wrap synchronous request
+                # Call online API with current messages
                 loop = asyncio.get_event_loop()
                 res_json = await loop.run_in_executor(None, self._get_online_response, current_messages)
                 
@@ -194,10 +196,10 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                         content = content.split("<function")[0].strip()
                 
                 # IMPORTANT: Sync cleaned content back to message object so history is clean
-                # Use None for empty content with tool calls (cleaner for API)
-                message["content"] = content if content else None
+                # Use empty string instead of None (more compatible)
+                message["content"] = content if content else ""
                 
-                # Clean message to only standard fields before appending
+                # Standardize assistant message for history
                 clean_msg = {
                     "role": "assistant",
                     "content": message["content"]
@@ -205,17 +207,25 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                 if "tool_calls" in message:
                     clean_msg["tool_calls"] = message["tool_calls"]
                 
-                # Handle tool calls
-                if "tool_calls" not in message or not message["tool_calls"]:
-                    final_text = content.strip()
+                if not message.get("tool_calls"):
+                    final_text = content.strip() if content else ""
+                    # Record the full turn in history
                     self.history.append({"role": "user", "content": prompt})
                     self.history.append({"role": "assistant", "content": final_text})
                     return final_text, None
 
+                # Append assistant tool-call message
                 current_messages.append(clean_msg)
+                
+                # Execute each tool call and append tool result
                 for tool_call in message["tool_calls"]:
                     func_name = tool_call["function"]["name"]
-                    func_args = json.loads(tool_call["function"]["arguments"])
+                    # Handle potential malformed arguments
+                    try:
+                        args_str = tool_call["function"].get("arguments", "{}")
+                        func_args = json.loads(args_str) if args_str else {}
+                    except json.JSONDecodeError:
+                        func_args = {}
                     
                     from . import ui
                     if status_obj:
@@ -223,23 +233,23 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                     
                     ui.show_tool_execution(func_name, func_args)
                     
-                    # Execute tool - check if it's native or MCP
+                    # Tool execution routing
                     if "__" in func_name:
-                        # MCP Tool (server__tool)
+                        # MCP Tool
                         server_name = func_name.split("__")[0]
                         if server_name in self.mcp_clients:
                             result = await self.mcp_clients[server_name].call_tool(func_name, func_args)
                         else:
                             result = f"Error: MCP server '{server_name}' not found."
                     else:
-                        # Native tool
+                        # Native Tool
                         result = goku_tools.execute_tool(func_name, func_args)
                     
+                    # Tool response must be role: tool
                     current_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],
-                        "name": func_name,
-                        "content": result
+                        "content": str(result)
                     })
                     
                     if status_obj:

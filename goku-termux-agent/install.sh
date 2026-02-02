@@ -34,10 +34,17 @@ if [ -n "$PREFIX" ]; then
     # In Termux, we try multiple names as mirrors vary
     # Rust/clang needed for building pydantic-core if wheel is missing
     pkg install -y python-requests python-rich rust binutils clang make 2>/dev/null
-    pip install requests rich mcp duckduckgo-search --break-system-packages 2>/dev/null
+    
+    # Install core dependencies first
+    pip install requests rich duckduckgo-search --break-system-packages
+    
+    # Try mcp separately as it often fails to build on Termux
+    echo "Attempting to install MCP (optional)..."
+    pip install mcp --break-system-packages 2>/dev/null || echo "⚠️  MCP installation skipped (build issue). Goku will use native tools."
 else
     # Standard Linux
-    pip install requests rich mcp duckduckgo-search --break-system-packages 2>/dev/null || pip install requests rich mcp duckduckgo-search
+    pip install requests rich duckduckgo-search --break-system-packages 2>/dev/null || pip install requests rich duckduckgo-search
+    pip install mcp --break-system-packages 2>/dev/null || pip install mcp 2>/dev/null
 fi
 
 # Create the goku command
