@@ -15,7 +15,7 @@ def list_files(directory="."):
         return f"Error listing files: {str(e)}"
 
 def read_file(file_path):
-    """Reads the content of a specified file."""
+    """Reads the text content of a specified file."""
     try:
         with open(file_path, 'r') as f:
             content = f.read()
@@ -25,6 +25,31 @@ def read_file(file_path):
             return content
     except Exception as e:
         return f"Error reading file {file_path}: {str(e)}"
+
+def run_command(command):
+    """Executes a shell command and returns the output."""
+    try:
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        out = result.stdout if result.stdout else ""
+        err = result.stderr if result.stderr else ""
+        return f"STDOUT:\n{out}\nSTDERR:\n{err}\nExit Code: {result.returncode}"
+    except Exception as e:
+        return f"Error executing command: {str(e)}"
+
+def get_os_info():
+    """Returns basic information about the user's OS and device."""
+    import platform
+    info = {
+        "system": platform.system(),
+        "node": platform.node(),
+        "release": platform.release(),
+        "version": platform.version(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "termux": "PREFIX" in os.environ
+    }
+    return json.dumps(info, indent=2)
+
 
 # Define tool schemas for the AI
 TOOLS_SCHEMA = [
@@ -60,13 +85,48 @@ TOOLS_SCHEMA = [
                 "required": ["file_path"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_command",
+            "description": "Executes a shell command in the terminal. Use this for OS interactions, installing packages, or running scripts. This is a HIGH PRIVILEGE action.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The exact shell command to run."
+                    }
+                },
+                "required": ["command"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_os_info",
+            "description": "Returns details about the user's OS, device, and environment (like if it's Termux).",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
     }
 ]
 
-def execute_tool(name, args):
-    """Dispatcher for tool execution."""
-    if name == "list_files":
+def execute_tool(name, args, permission_callback=None):
+    """Dispatcher for tool execution with optional permission check."""
+    if name == "run_command":
+        if permission_callback:
+            if not permission_callback(args.get("command")):
+                return "Operation cancelled by user."
+        return run_command(**args)
+    elif name == "list_files":
         return list_files(**args)
     elif name == "read_file":
         return read_file(**args)
+    elif name == "get_os_info":
+        return get_os_info()
     return f"Tool {name} not found."

@@ -43,3 +43,19 @@ def get_user_input():
 
 def show_loading():
     return console.status("[bold green]Thinking...")
+
+def show_thought(text):
+    if not text.strip():
+        return
+    panel = Panel(Markdown(text), title="💭 Thought", border_style="dim", padding=(0, 1))
+    console.print(panel)
+
+def show_tool_execution(tool_name, args):
+    console.print(f"[bold cyan]🔧 Tool {tool_name}[/bold cyan] [dim]{json.dumps(args)}[/dim]")
+
+def request_permission(command):
+    console.print(Panel(f"[bold red]⚠️ DANGEROUS COMMAND DETECTED[/bold red]\n\n[yellow]{command}[/yellow]", border_style="red"))
+    choice = console.input("[bold white]Allow this command? (y/n): [/bold white]").lower()
+    return choice == 'y'
+
+import json

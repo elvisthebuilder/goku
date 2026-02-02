@@ -61,7 +61,7 @@ class GokuEngine:
         except subprocess.CalledProcessError as e:
             raise Exception(f"Offline error: {e.stderr}")
 
-    def generate(self, prompt, status_callback=None):
+    def generate(self, prompt, status_callback=None, permission_callback=None):
         try:
             if self.mode == "offline":
                 response = self._get_offline_response(prompt)
@@ -79,9 +79,26 @@ class GokuEngine:
                 res_json = self._get_online_response(current_messages)
                 message = res_json["choices"][0]["message"]
                 
+                # Check for and display thoughts/reasoning
+                # Some models use 'reasoning_content', others put it in 'content' inside tags
+                thought = message.get("reasoning_content")
+                content = message.get("content", "")
+                
+                # If no specific reasoning field, check for <thought> tags (common in Qwen/DeepSeek)
+                if not thought and "<thought>" in content:
+                    import re
+                    match = re.search(r"<thought>(.*?)</thought>", content, re.DOTALL)
+                    if match:
+                        thought = match.group(1).strip()
+                        content = content.replace(match.group(0), "").strip()
+
+                if thought and status_callback:
+                    from . import ui
+                    ui.show_thought(thought)
+
                 if "tool_calls" not in message or not message["tool_calls"]:
                     # No more tools, just return the text
-                    final_text = message.get("content", "").strip()
+                    final_text = content.strip()
                     self.history.append({"role": "user", "content": prompt})
                     self.history.append({"role": "assistant", "content": final_text})
                     return final_text, None
@@ -92,10 +109,11 @@ class GokuEngine:
                     func_name = tool_call["function"]["name"]
                     func_args = json.loads(tool_call["function"]["arguments"])
                     
-                    if status_callback:
-                        status_callback(f"Executing {func_name}...")
+                    from . import ui
+                    ui.show_tool_execution(func_name, func_args)
                     
-                    result = goku_tools.execute_tool(func_name, func_args)
+                    # Execute tool with permission check if it's run_command
+                    result = goku_tools.execute_tool(func_name, func_args, permission_callback=permission_callback)
                     
                     current_messages.append({
                         "role": "tool",
