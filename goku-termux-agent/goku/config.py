@@ -10,7 +10,7 @@ BIN_DIR = GOKU_DIR / "bin"
 LLAMA_CPP_BIN = BIN_DIR / "llama-cli"
 
 # Online Configuration
-DEFAULT_HF_MODEL = "meta-llama/Llama-3.3-70B-Instruct" 
+DEFAULT_HF_MODEL = "Qwen/Qwen2.5-72B-Instruct" 
 CONFIG_FILE = GOKU_DIR / "config.json"
 
 def load_token():

@@ -106,8 +106,8 @@ def main():
                     ui.show_error("Could not find previous query.")
                     continue
 
-            with ui.show_loading():
-                response, error = engine.generate(user_input)
+            with ui.show_loading() as status:
+                response, error = engine.generate(user_input, status_callback=lambda m: status.update(f"[bold green]{m}"))
             
             if error:
                 ui.show_error(error)
