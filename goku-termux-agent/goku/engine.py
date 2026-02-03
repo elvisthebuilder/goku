@@ -77,6 +77,10 @@ class GokuEngine:
             except:
                 error_details = f": {response.text[:200]}"
             
+            # DEBUG: CRITICAL for fixing the persistent 400 error
+            print(f"\n[DEBUG] API Error Response: {response.text}")
+            print(f"[DEBUG] Failed Payload: {json.dumps(payload, indent=2)}")
+            
             raise Exception(f"Online API error: {e}{error_details}")
         except Exception as e:
             raise Exception(f"Online API error: {str(e)}")
