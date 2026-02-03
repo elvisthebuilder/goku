@@ -196,14 +196,17 @@ class GokuEngine:
             }]
         }
 
-    def _get_offline_response(self, prompt):
+    def _get_offline_response(self, prompt, history=None):
         if not config.LLAMA_CPP_BIN.exists():
             raise FileNotFoundError("llama.cpp binary not found. Run 'goku setup' to install offline support.")
         if not config.MODEL_PATH.exists():
             raise FileNotFoundError("Model file not found. Run 'goku setup' to download the model.")
 
         full_prompt = ""
-        for msg in self.history[-config.SESSION_MEMORY_MAX:]:
+        # Use provided history or fallback to class history
+        hist_msgs = history if history is not None else self.history[-config.SESSION_MEMORY_MAX:]
+        
+        for msg in hist_msgs:
              full_prompt += f"<|im_start|>{msg['role']}\n{msg['content']}<|im_end|>\n"
         full_prompt += f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
 
@@ -212,12 +215,20 @@ class GokuEngine:
             "-m", str(config.MODEL_PATH),
             "-p", f"{self.SYSTEM_PROMPT}\nUser: {prompt}\nAssistant:",
             "-n", "512",
-            "--ctx-size", "2048"
+            "--ctx-size", "2048",
+            "--log-disable",  # Suppress banner and logs
+            "--no-display-prompt" # Don't repeat the prompt in stdout
         ]
         
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            return result.stdout.strip()
+            output = result.stdout.strip()
+            
+            # Robust cleanup: strip everything before and including the last "Assistant:"
+            if "Assistant:" in output:
+                output = output.split("Assistant:")[-1].strip()
+            
+            return output
         except subprocess.CalledProcessError as e:
             raise Exception(f"Offline error: {e.stderr}")
 
@@ -240,9 +251,20 @@ Always prioritize clarity and correctness. No preamble, just results or tool cal
         """Async version of generate to support MCP."""
         try:
             if self.mode == "offline":
+                # Use a shorter history for offline to stay snappy
+                offline_history = self.history[-3:] # Only last 3 turns
+                
                 # Wrap synchronous offline call
                 loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(None, self._get_offline_response, prompt)
+                response = await loop.run_in_executor(None, self._get_offline_response, prompt, offline_history)
+                
+                # REPAIR: If model echoed its instructions (common in small offline models)
+                if "> You are Goku" in response:
+                     response = response.split("### PERSONA:")[-1].split("### CRITICAL RULES:")[-1].strip()
+                     # If still messy, try split by last known marker
+                     if "Assistant:" in response:
+                          response = response.split("Assistant:")[-1].strip()
+                
                 self.history.append({"role": "user", "content": prompt})
                 self.history.append({"role": "assistant", "content": response})
                 return response, None

@@ -9,8 +9,8 @@ import json
 console = Console()
 
 def print_welcome():
-    welcome_text = Text("Welcome to Goku AI Agent", style="bold cyan")
-    console.print(Panel(welcome_text, subtitle="Type /help for commands", border_style="bright_blue"))
+    welcome_text = Text("Goku AI Agent", style="bold cyan")
+    console.print(Panel(welcome_text, subtitle="Type /help for commands", border_style="blue", padding=(0, 2)))
 
 def print_help():
     help_text = """
