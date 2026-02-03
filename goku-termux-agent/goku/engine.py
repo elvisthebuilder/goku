@@ -114,12 +114,13 @@ You are an expert software engineer and helpful friend. You write clean, modular
 You are capable of full-stack development, debugging, and system administration.
 
 ### CRITICAL RULES:
-1. **Explore**: Use tools to understand the codebase before making changes.
-2. **Plan**: Think and explain your approach before editing.
-3. **Edit**: Use the provided file editing tools for efficiency and safety.
-4. **Interact**: Be concise, helpful, and never output raw internal tool tags. Use the official tool-calling API.
+1. **Explore**: Use tools to understand the codebase.
+2. **Plan**: Explain your approach before editing.
+3. **Edit**: Use provided tools for all file operations.
+4. **Interact**: Be concise. NEVER output raw function/tool tags or JSON in your response text. Use the official tool-calling API.
 
-Always prioritize clarity and correctness."""
+Always prioritize clarity and correctness. No preamble, just results or tool calls.
+"""
 
     async def generate_async(self, prompt, status_obj=None):
         """Async version of generate to support MCP."""
@@ -132,11 +133,14 @@ Always prioritize clarity and correctness."""
                 self.history.append({"role": "assistant", "content": response})
                 return response, None
 
-            # Prepare this turn's messages
-            turn_messages = [{"role": "user", "content": prompt}]
+            # Persist user prompt immediately to prevent context loss on failure
+            self.history.append({"role": "user", "content": prompt})
+            
+            # Prepare this turn's ongoing messages (not yet in permanent history)
+            turn_messages = []
             
             while True:
-                # Merge history with the current ongoing turn
+                # Construct combined messages for the API call
                 api_messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
                 api_messages += self.history[-config.SESSION_MEMORY_MAX:]
                 api_messages += turn_messages
@@ -163,40 +167,50 @@ Always prioritize clarity and correctness."""
 
                 # Strip internal function calls from text (sometimes models echo them)
                 if content:
-                    # Catch both <function=name>{args} and <function call: name>{args}
-                    content = re.sub(r"<function=.*?>.*?(?=(<|$))", "", content, flags=re.DOTALL).strip()
-                    content = re.sub(r"<function call:.*?>.*?(?=(<|$))", "", content, flags=re.DOTALL).strip()
-                    # Final cleanup if anything leaky remains
+                    # Strip any raw function tags or "name, {args}" patterns leaky models produce
+                    # 1. Official-looking tags
+                    content = re.sub(r"<function.*?>.*?(</function>|(?=<|$))", "", content, flags=re.DOTALL).strip()
+                    # 2. Pattern: name, {"args": ...}
+                    content = re.sub(r"\w+,\s*\{.*?\}(?=(\n|$))", "", content, flags=re.DOTALL).strip()
+                    # 3. Final leaky checks
                     if "<function" in content:
                         content = content.split("<function")[0].strip()
                 
                 # IMPORTANT: Ensure content is never truly empty for the assistant
-                # (Some routers like HF fail on {"role": "assistant", "content": ""})
-                if not content and not message.get("tool_calls"):
-                    content = "..." # Minimal visible content
+                message["content"] = content if content else "..."
                 
-                message["content"] = content
-                
-                # Standardize assistant message for this turn's logical history
+                # Standardize assistant message
                 clean_msg = {
                     "role": "assistant",
-                    "content": message["content"] if message["content"] else ""
+                    "content": message["content"]
                 }
+                
                 if "tool_calls" in message:
-                    clean_msg["tool_calls"] = message["tool_calls"]
-                    # Fix malformed arguments
-                    for tc in clean_msg["tool_calls"]:
-                         if "function" in tc:
-                              args = tc["function"].get("arguments")
-                              if args is None or args == "null":
-                                   tc["function"]["arguments"] = "{}"
+                    # REPAIR: Fix misinterpreted tool calls (e.g. Router concatenates name and args)
+                    fixed_tool_calls = []
+                    for tc in message["tool_calls"]:
+                         name = tc["function"].get("name", "")
+                         args = tc["function"].get("arguments", "{}")
+                         
+                         if "," in name and "{" in name:
+                              # Case: name="search_web,{\"query\": ...}"
+                              parts = name.split(",", 1)
+                              name = parts[0].strip()
+                              if args in [None, "null", "", "{}"]:
+                                   args = parts[1].strip()
+                         
+                         tc["function"]["name"] = name
+                         tc["function"]["arguments"] = args if args not in [None, "null", ""] else "{}"
+                         fixed_tool_calls.append(tc)
+                    
+                    clean_msg["tool_calls"] = fixed_tool_calls
 
-                # Add assistant message to the current turn
+                # Add assistant message to the turn messages
                 turn_messages.append(clean_msg)
 
                 if not message.get("tool_calls"):
                     final_text = content.strip() if content else "..."
-                    # Turn complete! Persist the entire turn to permanent history
+                    # Turn complete! Save everything to permanent history
                     self.history.extend(turn_messages)
                     return final_text, None
                 
