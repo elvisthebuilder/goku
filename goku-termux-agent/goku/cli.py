@@ -162,12 +162,27 @@ def main():
                     ui.show_error(f"Git repository not found at {repo_dir}. Please update manually using git pull.")
                 break
 
-            if user_input.startswith("/mode "):
-                mode = user_input.split(" ")[1].lower()
-                if engine.set_mode(mode):
-                    ui.console.print(f"[green]Switched to {mode} mode.[/green]")
+            if user_input.startswith("/mode"):
+                parts = user_input.split(" ")
+                if len(parts) > 1:
+                    mode = parts[1].lower()
+                    if engine.set_mode(mode):
+                        ui.console.print(f"[green]Switched to {mode} mode.[/green]")
+                    else:
+                        ui.show_error("Invalid mode. Use online or offline.")
                 else:
-                    ui.show_error("Invalid mode. Use online or offline.")
+                    ui.console.print(f"Current mode: [bold]{engine.mode}[/bold]")
+                    ui.console.print("Usage: /mode [online|offline]")
+                continue
+
+            if user_input.lower() == "/online":
+                engine.set_mode("online")
+                ui.console.print("[green]Switched to online mode.[/green]")
+                continue
+
+            if user_input.lower() == "/offline":
+                engine.set_mode("offline")
+                ui.console.print("[yellow]Switched to offline mode.[/yellow]")
                 continue
             
             if user_input == "/retry":

@@ -16,6 +16,7 @@ def print_help():
     help_text = """
     [bold yellow]Available Commands:[/bold yellow]
     - [cyan]/mode [online|offline][/cyan] : Switch between API and Local modes
+    - [cyan]/online[/cyan] / [cyan]/offline[/cyan]      : Shortcuts to switch online/offline
     - [cyan]/provider [name][/cyan]        : List or switch AI providers (openai, anthropic, etc.)
     - [cyan]/token [provider] <key>[/cyan] : Save an API token (defaults to current provider)
     - [cyan]/model <name>[/cyan]           : Change the active model for current provider
