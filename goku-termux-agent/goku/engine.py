@@ -216,7 +216,6 @@ class GokuEngine:
             "-p", f"{self.SYSTEM_PROMPT}\nUser: {prompt}\nAssistant:",
             "-n", "512",
             "--ctx-size", "2048",
-            "-q",             # Quiet mode
             "--log-disable",  # Suppress banner and logs
             "--no-display-prompt" # Don't repeat the prompt in stdout
         ]
