@@ -47,40 +47,154 @@ class GokuEngine:
         self.history = []
 
     def _get_online_response(self, messages):
+        provider_name = config.get_active_provider()
+        provider_cfg = config.PROVIDERS.get(provider_name, config.PROVIDERS[config.DEFAULT_PROVIDER])
+        
+        url = provider_cfg["url"]
+        token = config.get_token(provider_name)
+        
         headers = {"Content-Type": "application/json"}
-        if config.HF_TOKEN:
-            headers["Authorization"] = f"Bearer {config.HF_TOKEN}"
-        # New HF Router API (OpenAI-compatible)
-        API_URL = "https://router.huggingface.co/v1/chat/completions"
+        if token:
+            if provider_name == "anthropic":
+                headers["x-api-key"] = token
+                headers["anthropic-version"] = "2023-06-01"
+            else:
+                headers["Authorization"] = f"Bearer {token}"
         
         # Merge native tools with MCP tools
         all_tools = goku_tools.TOOLS_SCHEMA + self.mcp_tools
         
-        payload = {
-            "model": config.DEFAULT_HF_MODEL,
-            "messages": messages,
-            "max_tokens": 2048,
-            "tools": all_tools,
-            "tool_choice": "auto",
-            "stream": False
-        }
+        # Handle different payload formats
+        if provider_name == "anthropic":
+            # Anthropic Messages API format
+            anthropic_messages, system_msg = self._convert_messages_to_anthropic(messages)
+            payload = {
+                "model": provider_cfg["model"],
+                "max_tokens": 2048,
+                "messages": anthropic_messages,
+                "system": system_msg,
+                "tools": self._convert_tools_to_anthropic(all_tools) if all_tools else None,
+            }
+        else:
+            # OpenAI / HF / GitHub / Ollama format
+            payload = {
+                "model": provider_cfg["model"],
+                "messages": messages,
+                "max_tokens": 2048,
+                "tools": all_tools if all_tools else None,
+                "tool_choice": "auto" if all_tools else None,
+                "stream": False
+            }
 
         try:
-            response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
             response.raise_for_status()
-            return response.json()
+            res_data = response.json()
+            
+            # Normalize response format
+            if provider_name == "anthropic":
+                return self._normalize_anthropic_response(res_data)
+            return res_data
+            
         except requests.exceptions.HTTPError as e:
-            # Try to get more details from the error response
             error_details = ""
             try:
                 error_json = response.json()
                 error_details = f": {error_json.get('error', {}).get('message', str(error_json))}"
             except:
                 error_details = f": {response.text[:200]}"
-            
-            raise Exception(f"Online API error: {e}{error_details}")
+            raise Exception(f"Online API error ({provider_name}): {e}{error_details}")
         except Exception as e:
-            raise Exception(f"Online API error: {str(e)}")
+            raise Exception(f"Online API error ({provider_name}): {str(e)}")
+
+    def _convert_messages_to_anthropic(self, messages):
+        """Convert OpenAI standard messages to Anthropic's specific format."""
+        anthropic_messages = []
+        system_msg = None
+        
+        for m in messages:
+            role = m["role"]
+            content = m.get("content", "")
+            
+            if role == "system":
+                system_msg = content
+            elif role == "user":
+                anthropic_messages.append({"role": "user", "content": content})
+            elif role == "assistant":
+                # Convert tool_calls if present
+                if "tool_calls" in m:
+                    anthropic_content = []
+                    if content and content != "...":
+                        anthropic_content.append({"type": "text", "text": content})
+                    
+                    for tc in m["tool_calls"]:
+                        anthropic_content.append({
+                            "type": "tool_use",
+                            "id": tc["id"],
+                            "name": tc["function"]["name"],
+                            "input": json.loads(tc["function"]["arguments"])
+                        })
+                    anthropic_messages.append({"role": "assistant", "content": anthropic_content})
+                else:
+                    anthropic_messages.append({"role": "assistant", "content": content})
+            elif role == "tool":
+                # Anthropic groups tool results into a USER message following the assistant's tool_use
+                # If the previous message was a user message and had tool_results, append to it.
+                # Otherwise, create a new user message.
+                result_block = {
+                    "type": "tool_result",
+                    "tool_use_id": m["tool_call_id"],
+                    "content": content
+                }
+                
+                if anthropic_messages and anthropic_messages[-1]["role"] == "user" and isinstance(anthropic_messages[-1]["content"], list):
+                     anthropic_messages[-1]["content"].append(result_block)
+                else:
+                     anthropic_messages.append({"role": "user", "content": [result_block]})
+                     
+        return anthropic_messages, system_msg
+
+    def _convert_tools_to_anthropic(self, tools):
+        """Convert OpenAI tool schema to Anthropic tool schema."""
+        anthropic_tools = []
+        for t in tools:
+            if t["type"] == "function":
+                f = t["function"]
+                anthropic_tools.append({
+                    "name": f["name"],
+                    "description": f["description"],
+                    "input_schema": f["parameters"]
+                })
+        return anthropic_tools
+
+    def _normalize_anthropic_response(self, data):
+        """Convert Anthropic response to OpenAI-compatible format."""
+        # data["content"] is a list of blocks
+        text_content = ""
+        tool_calls = []
+        
+        for block in data.get("content", []):
+            if block["type"] == "text":
+                text_content += block["text"]
+            elif block["type"] == "tool_use":
+                tool_calls.append({
+                    "id": block["id"],
+                    "type": "function",
+                    "function": {
+                        "name": block["name"],
+                        "arguments": json.dumps(block["input"])
+                    }
+                })
+        
+        return {
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": text_content,
+                    "tool_calls": tool_calls if tool_calls else None
+                }
+            }]
+        }
 
     def _get_offline_response(self, prompt):
         if not config.LLAMA_CPP_BIN.exists():

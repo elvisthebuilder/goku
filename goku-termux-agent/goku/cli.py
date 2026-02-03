@@ -22,18 +22,20 @@ def main():
 
     ui.print_welcome()
 
-    # Onboarding: Check for token
-    if not config.HF_TOKEN:
-        ui.console.print("[yellow]HuggingFace Token not found![/yellow]")
-        ui.console.print("Goku needs a [bold]Read[/bold] token to use the online mode.")
-        ui.console.print("Get one at: [link=https://huggingface.co/settings/tokens]https://huggingface.co/settings/tokens[/link]\n")
-        new_token = ui.console.input("[bold cyan]Enter your HF Token (or press Enter to skip and use offline mode): [/bold cyan]").strip()
+    # Onboarding: Check for active provider and token
+    active_provider = config.get_active_provider()
+    if not config.get_token(active_provider) and active_provider == "huggingface":
+        ui.console.print(f"[yellow]Active provider ({active_provider}) token not found![/yellow]")
+        ui.console.print(f"Goku needs an API token for [bold]{active_provider}[/bold] to use online mode.")
+        if active_provider == "huggingface":
+             ui.console.print("Get a free token at: [link=https://huggingface.co/settings/tokens]https://huggingface.co/settings/tokens[/link]\n")
+        
+        new_token = ui.console.input(f"[bold cyan]Enter your {active_provider} Token (or press Enter to skip): [/bold cyan]").strip()
         if new_token:
-            config.save_token(new_token)
-            config.HF_TOKEN = new_token
-            ui.console.print("[green]Token saved! Online mode activated.[/green]")
+            config.save_token(new_token, active_provider)
+            ui.console.print(f"[green]Token saved for {active_provider}! Online mode activated.[/green]")
         else:
-            ui.console.print("[bold yellow]Skipping token. Online mode will fail until a token is added via /token.[/bold yellow]")
+            ui.console.print("[bold yellow]Skipping token. Online mode for this provider will fail.[/bold yellow]")
 
     ui.print_status(engine.mode)
 
@@ -52,6 +54,64 @@ def main():
                 ui.print_help()
                 continue
             
+            # Provider Command
+            if user_input.startswith("/provider"):
+                parts = user_input.split(" ")
+                if len(parts) == 1:
+                    ui.console.print("[bold]Available Providers:[/bold]")
+                    active = config.get_active_provider()
+                    for p in config.PROVIDERS:
+                        status = "[green](active)[/green]" if p == active else ""
+                        ui.console.print(f" - {p} {status}")
+                else:
+                    target = parts[1].lower()
+                    if config.set_active_provider(target):
+                        ui.console.print(f"[green]Switched to {target} provider.[/green]")
+                    else:
+                        ui.show_error(f"Provider '{target}' not found.")
+                continue
+
+            # Model Command
+            if user_input.startswith("/model"):
+                parts = user_input.split(" ")
+                if len(parts) > 1:
+                    model_name = parts[1]
+                    provider = config.get_active_provider()
+                    if provider in config.PROVIDERS:
+                        config.PROVIDERS[provider]["model"] = model_name
+                        # Save to config file too
+                        cfg = config.load_config()
+                        models = cfg.get("models", {})
+                        models[provider] = model_name
+                        cfg["models"] = models
+                        config.save_config(cfg)
+                        ui.console.print(f"[green]Model for {provider} set to: {model_name}[/green]")
+                else:
+                    provider = config.get_active_provider()
+                    current_model = config.PROVIDERS[provider]["model"]
+                    ui.console.print(f"Current model for [bold]{provider}[/bold]: [cyan]{current_model}[/cyan]")
+                continue
+
+            # Token Command
+            if user_input.startswith("/token"):
+                parts = user_input.split(" ")
+                if len(parts) == 2:
+                    token = parts[1]
+                    provider = config.get_active_provider()
+                    config.save_token(token, provider)
+                    ui.console.print(f"[green]Token saved for {provider}![/green]")
+                elif len(parts) == 3:
+                    provider = parts[1].lower()
+                    token = parts[2]
+                    if provider in config.PROVIDERS:
+                        config.save_token(token, provider)
+                        ui.console.print(f"[green]Token saved for {provider}![/green]")
+                    else:
+                        ui.show_error(f"Provider '{provider}' not found.")
+                else:
+                    ui.console.print("Usage: /token [provider] <key>")
+                continue
+
             # MCP Commands
             if user_input.startswith("/mcp"):
                 parts = user_input.split(" ")
@@ -76,8 +136,8 @@ def main():
                 
             if user_input.lower() == "/clear":
                 engine.clear_history()
-                ui.console.clear()  # Clear the terminal screen
-                ui.print_welcome()  # Redisplay the welcome header
+                ui.console.clear() 
+                ui.print_welcome() 
                 ui.print_status(engine.mode)
                 continue
 
@@ -86,16 +146,8 @@ def main():
                 os.system(f"bash {config.GOKU_DIR}/scripts/setup_offline.sh")
                 continue
 
-            if user_input.startswith("/token "):
-                token = user_input.split(" ", 1)[1].strip()
-                config.save_token(token)
-                config.HF_TOKEN = token
-                ui.console.print("[green]Token saved successfully![/green]")
-                continue
-
             if user_input.lower() in ["/update", "update"]:
                 ui.console.print("[yellow]Checking for updates...[/yellow]")
-                
                 repo_path_file = config.GOKU_DIR / "repo_path"
                 if repo_path_file.exists():
                     repo_dir = repo_path_file.read_text().strip()

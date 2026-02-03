@@ -9,25 +9,97 @@ MODELS_DIR = GOKU_DIR / "models"
 BIN_DIR = GOKU_DIR / "bin"
 LLAMA_CPP_BIN = BIN_DIR / "llama-cli"
 
-# Online Configuration
-DEFAULT_HF_MODEL = "meta-llama/Llama-3.3-70B-Instruct" 
+# Online Configuration: Providers and Models
 CONFIG_FILE = GOKU_DIR / "config.json"
 
-def load_token():
+PROVIDERS = {
+    "huggingface": {
+        "url": "https://router.huggingface.co/v1/chat/completions",
+        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "token_env": "HF_TOKEN"
+    },
+    "openai": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "model": "gpt-4o",
+        "token_env": "OPENAI_API_KEY"
+    },
+    "anthropic": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "model": "claude-3-5-sonnet-20240620",
+        "token_env": "ANTHROPIC_API_KEY"
+    },
+    "ollama": {
+        "url": "http://localhost:11434/v1/chat/completions",
+        "model": "qwen2.5-coder:7b",
+        "token_env": None
+    },
+    "github": {
+        "url": "https://models.inference.ai.azure.com/chat/completions",
+        "model": "gpt-4o",
+        "token_env": "GITHUB_TOKEN"
+    }
+}
+
+DEFAULT_PROVIDER = "huggingface"
+
+def load_config():
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, 'r') as f:
-                return json.load(f).get("hf_token")
+                return json.load(f)
         except:
             pass
-    return os.getenv("HF_TOKEN")
+    return {}
 
-def save_token(token):
+def save_config(data):
     GOKU_DIR.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_FILE, 'w') as f:
-        json.dump({"hf_token": token}, f)
+        json.dump(data, f, indent=4)
 
-HF_TOKEN = load_token()
+def get_active_provider():
+    return load_config().get("active_provider", DEFAULT_PROVIDER)
+
+def set_active_provider(name):
+    if name in PROVIDERS:
+        cfg = load_config()
+        cfg["active_provider"] = name
+        save_config(cfg)
+        return True
+    return False
+
+def get_token(provider=None):
+    if not provider:
+        provider = get_active_provider()
+    
+    # Check config file
+    cfg = load_config()
+    tokens = cfg.get("tokens", {})
+    if provider in tokens:
+        return tokens[provider]
+    
+    # Check old hf_token key for backward compatibility
+    if provider == "huggingface" and cfg.get("hf_token"):
+        return cfg.get("hf_token")
+
+    # Check env var
+    env_var = PROVIDERS.get(provider, {}).get("token_env")
+    if env_var:
+        return os.getenv(env_var)
+    return None
+
+def save_token(token, provider=None):
+    if not provider:
+        provider = get_active_provider()
+    
+    cfg = load_config()
+    tokens = cfg.get("tokens", {})
+    tokens[provider] = token
+    cfg["tokens"] = tokens
+    save_config(cfg)
+
+# Backward compatibility
+HF_TOKEN = get_token("huggingface")
+DEFAULT_HF_MODEL = PROVIDERS["huggingface"]["model"]
 
 def load_mcp_servers():
     """Load MCP server configurations."""
