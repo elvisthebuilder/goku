@@ -61,6 +61,7 @@ class GokuEngine:
             "messages": messages,
             "max_tokens": 2048,
             "tools": all_tools,
+            "tool_choice": "auto",
             "stream": False
         }
 
@@ -76,10 +77,6 @@ class GokuEngine:
                 error_details = f": {error_json.get('error', {}).get('message', str(error_json))}"
             except:
                 error_details = f": {response.text[:200]}"
-            
-            # DEBUG: CRITICAL for fixing the persistent 400 error
-            print(f"\n[DEBUG] API Error Response: {response.text}")
-            print(f"[DEBUG] Failed Payload: {json.dumps(payload, indent=2)}")
             
             raise Exception(f"Online API error: {e}{error_details}")
         except Exception as e:
@@ -116,40 +113,13 @@ class GokuEngine:
 You are an expert software engineer and helpful friend. You write clean, modular, and documented code.
 You are capable of full-stack development, debugging, and system administration.
 
-### TOOLS:
-- `search_web(query)`: Search the internet for real-time information.
-- `create_file(path, content)`: Create new files.
-- `edit_file(path, old_text, new_text)`: Edit existing files safely.
-- `search_code(directory, query)`: Search for code patterns.
-- `list_files(directory)`: Explore directories.
-- `read_file(path)`: Read file content.
-- `run_command(cmd)`: Run shell commands.
-- Plus any connected MCP tools (use them when relevant!)
-
 ### CRITICAL RULES:
+1. **Explore**: Use tools to understand the codebase before making changes.
+2. **Plan**: Think and explain your approach before editing.
+3. **Edit**: Use the provided file editing tools for efficiency and safety.
+4. **Interact**: Be concise, helpful, and never output raw internal tool tags. Use the official tool-calling API.
 
-**1. Coding Workflow:**
-   - **Explore**: Use `list_files` and `search_code` to understand the codebase first.
-   - **Plan**: Think about the changes before making them.
-   - **Edit**: Use `edit_file` for small changes. Use `create_file` for new modules.
-   - **Verify**: Always check your work (e.g., run the script or cat the file).
-
-**2. Tool Usage:**
-   - Prefer `edit_file` over `run_command` for editing code (it's safer).
-   - Use `run_command` for execution, testing, and git operations.
-   - Always ask permission before destructive actions or running commands.
-
-**3. Interaction:**
-   - Be concise but helpful.
-   - If a request is vague, ask clarifying questions.
-   - When writing code, return it in a markdown block first. Only use `create_file` if the user explicitly asks to save it or if it's a large project.
-   - NEVER include raw internal tool/function calls (like <function=...>) in your response text. Use the proper tool call API instead.
-
-### EXAMPLES:
-User: "Fix the bug in main.py"
-You: "I'll check main.py first." -> Call `read_file`
-User: "Add a greet function."
-You: "I'll add it using edit_file." -> Call `edit_file` with unique context string."""
+Always prioritize clarity and correctness."""
 
     async def generate_async(self, prompt, status_obj=None):
         """Async version of generate to support MCP."""
