@@ -1,4 +1,4 @@
-# 🐉 GOKU: The Production-Ready AI Terminal Agent
+J# 🐉 GOKU: The Production-Ready AI Terminal Agent
 
 GOKU is a premium, split-architecture AI assistant designed for Termux and high-performance terminal environments. It combines a streaming Textual TUI with a powerful Dockerized backend.
 
@@ -73,7 +73,7 @@ If you've discovered this project on GitHub and want to use it or contribute, fo
 ### 2. Quick Start (Local Development)
 ```bash
 # Clone the repository
-git clone https://github.com/elvisthebuilder/goku-terminal-agent.git
+git clone https://github.com/elvisthebuilder/goku.git
 cd goku-terminal-agent
 
 # Start the full backend stack
