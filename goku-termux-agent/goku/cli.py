@@ -134,7 +134,7 @@ def main():
                     ui.console.print("Usage: /mcp [list|reload]")
                 continue
                 
-            if user_input.lower() == "/clear":
+            if user_input.lower() in ["/clear", "clear"]:
                 engine.clear_history()
                 ui.console.clear() 
                 ui.print_welcome() 

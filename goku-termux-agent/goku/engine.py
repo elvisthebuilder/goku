@@ -216,6 +216,7 @@ class GokuEngine:
             "-p", f"{self.SYSTEM_PROMPT}\nUser: {prompt}\nAssistant:",
             "-n", "512",
             "--ctx-size", "2048",
+            "-q",             # Quiet mode
             "--log-disable",  # Suppress banner and logs
             "--no-display-prompt" # Don't repeat the prompt in stdout
         ]
@@ -224,11 +225,23 @@ class GokuEngine:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             output = result.stdout.strip()
             
-            # Robust cleanup: strip everything before and including the last "Assistant:"
+            # If stdout is empty but stderr has info, it might be an error or unexpected output
+            if not output and result.stderr:
+                # Filter out stats and banner from stderr if it leaked there
+                err = result.stderr
+                if "Assistant:" in err:
+                    output = err.split("Assistant:")[-1].strip()
+            
+            # Extreme cleanup: Some builds echo the prompt regardless of flags
             if "Assistant:" in output:
                 output = output.split("Assistant:")[-1].strip()
             
-            return output
+            # Strip any remaining prompt fragments or metadata
+            output = re.sub(r"\[ Prompt: .*? \]", "", output)
+            output = re.sub(r"\[ Generation: .*? \]", "", output)
+            output = re.sub(r"> You are Goku.*?\n", "", output, flags=re.DOTALL)
+            
+            return output.strip()
         except subprocess.CalledProcessError as e:
             raise Exception(f"Offline error: {e.stderr}")
 
