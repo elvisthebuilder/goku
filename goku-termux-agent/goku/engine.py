@@ -77,8 +77,6 @@ class GokuEngine:
             except:
                 error_details = f": {response.text[:200]}"
             
-            # DEBUG: Print payload to identify schema issues
-            print(f"\n[DEBUG] Failed Payload: {json.dumps(payload, indent=2)}")
             raise Exception(f"Online API error: {e}{error_details}")
         except Exception as e:
             raise Exception(f"Online API error: {str(e)}")
@@ -140,7 +138,7 @@ You are capable of full-stack development, debugging, and system administration.
 **3. Interaction:**
    - Be concise but helpful.
    - If a request is vague, ask clarifying questions.
-   - When writing code, return the full file content if creating it, or the specific diff if editing.
+   - When writing code, return it in a markdown block first. Only use `create_file` if the user explicitly asks to save it or if it's a large project.
    - NEVER include raw internal tool/function calls (like <function=...>) in your response text. Use the proper tool call API instead.
 
 ### EXAMPLES:
@@ -199,11 +197,8 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                         content = content.split("<function")[0].strip()
                 
                 # IMPORTANT: Sync cleaned content back to message object so history is clean
-                # Use None for empty content with tool calls (cleaner for API, e.g., vLLM/TGI)
-                if "tool_calls" in message and message["tool_calls"]:
-                     message["content"] = None 
-                else:
-                     message["content"] = content if content else ""
+                # Use empty string (None can cause 400s on some strict routers)
+                message["content"] = content if content else ""
                 
                 # Standardize assistant message for history
                 clean_msg = {
@@ -261,6 +256,7 @@ You: "I'll add it using edit_file." -> Call `edit_file` with unique context stri
                     current_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],
+                        "name": func_name,
                         "content": str(result)
                     })
                     

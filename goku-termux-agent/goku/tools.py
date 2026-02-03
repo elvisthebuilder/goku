@@ -226,18 +226,6 @@ TOOLS_SCHEMA = [
                 "required": ["command"]
             }
         }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_os_info",
-            "description": "Get system information.",
-            "parameters": {
-                "type": "object",
-                "properties": {}
-            },
-            "required": []
-        }
     }
 ]
 
@@ -261,6 +249,4 @@ def execute_tool(name, args, permission_callback=None):
         return search_code(args.get("directory"), args.get("query"))
     elif name == "search_web":
         return search_web(args.get("query"))
-    elif name == "get_os_info":
-        return get_os_info()
     return f"Tool {name} not found."
