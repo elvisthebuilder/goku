@@ -37,6 +37,7 @@ def main():
 
     ui.print_status(engine.mode)
 
+    last_user_input = None
     while True:
         try:
             user_input = ui.get_user_input().strip()
@@ -103,8 +104,6 @@ def main():
                     repo_dir = os.path.abspath(os.path.join(script_dir, "../../"))
                 
                 if os.path.exists(os.path.join(repo_dir, ".git")):
-                    # We need to find the install.sh relative to the repo root
-                    # Your project has it in goku-termux-agent/install.sh
                     os.system(fr"cd {repo_dir} && git pull && find . -name install.sh -exec bash {{}} \;")
                     ui.console.print("[green]Update complete! Please restart goku.[/green]")
                 else:
@@ -118,22 +117,24 @@ def main():
                 else:
                     ui.show_error("Invalid mode. Use online or offline.")
                 continue
-
+            
             if user_input == "/retry":
-                if not engine.history:
+                if not last_user_input:
                     ui.show_error("No previous query to retry.")
                     continue
-                # Pop the last assistant message and user message to retry
-                last_user_query = engine.history.pop()["content"] if engine.history[-1]["role"] == "assistant" else None
-                # Actually if last was user, we just use it. If last was assistant, we need to pop and use the one before.
-                # Simplified: just pop assistant if exists, then pop user and use it.
-                if engine.history and engine.history[-1]["role"] == "assistant":
+                
+                # Clean history of the last (possibly incomplete) turn
+                while engine.history and engine.history[-1]["role"] != "user":
                     engine.history.pop()
                 if engine.history and engine.history[-1]["role"] == "user":
-                    user_input = engine.history.pop()["content"]
-                else:
-                    ui.show_error("Could not find previous query.")
-                    continue
+                    engine.history.pop()
+                
+                user_input = last_user_input
+                ui.console.print(f"[dim]Retrying: {user_input}[/dim]")
+
+            # Save for potential retry before processing command-like inputs
+            if not user_input.startswith("/"):
+                last_user_input = user_input
 
             try:
                 with ui.show_loading() as status:

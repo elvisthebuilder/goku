@@ -132,18 +132,18 @@ Always prioritize clarity and correctness."""
                 self.history.append({"role": "assistant", "content": response})
                 return response, None
 
-            # Online Agentic Loop
-            # Prepare initial messages with the system prompt
-            current_messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
-            # Limit history to prevent context overflow and reduce costs
-            for msg in self.history[-config.SESSION_MEMORY_MAX:]:
-                current_messages.append(msg)
-            current_messages.append({"role": "user", "content": prompt})
-
+            # Prepare this turn's messages
+            turn_messages = [{"role": "user", "content": prompt}]
+            
             while True:
-                # Call online API with current messages
+                # Merge history with the current ongoing turn
+                api_messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
+                api_messages += self.history[-config.SESSION_MEMORY_MAX:]
+                api_messages += turn_messages
+
+                # Call online API
                 loop = asyncio.get_event_loop()
-                res_json = await loop.run_in_executor(None, self._get_online_response, current_messages)
+                res_json = await loop.run_in_executor(None, self._get_online_response, api_messages)
                 
                 message = res_json["choices"][0]["message"]
                 
@@ -170,33 +170,35 @@ Always prioritize clarity and correctness."""
                     if "<function" in content:
                         content = content.split("<function")[0].strip()
                 
-                # IMPORTANT: Sync cleaned content back to message object so history is clean
-                # Use empty string (None can cause 400s on some strict routers)
-                message["content"] = content if content else ""
+                # IMPORTANT: Ensure content is never truly empty for the assistant
+                # (Some routers like HF fail on {"role": "assistant", "content": ""})
+                if not content and not message.get("tool_calls"):
+                    content = "..." # Minimal visible content
                 
-                # Standardize assistant message for history
+                message["content"] = content
+                
+                # Standardize assistant message for this turn's logical history
                 clean_msg = {
                     "role": "assistant",
-                    "content": message["content"]
+                    "content": message["content"] if message["content"] else ""
                 }
                 if "tool_calls" in message:
                     clean_msg["tool_calls"] = message["tool_calls"]
-                    # Fix malformed arguments in history (some models emit "null" or None)
+                    # Fix malformed arguments
                     for tc in clean_msg["tool_calls"]:
                          if "function" in tc:
                               args = tc["function"].get("arguments")
                               if args is None or args == "null":
                                    tc["function"]["arguments"] = "{}"
 
-                if not message.get("tool_calls"):
-                    final_text = content.strip() if content else ""
-                    # Record the full turn in history
-                    self.history.append({"role": "user", "content": prompt})
-                    self.history.append({"role": "assistant", "content": final_text})
-                    return final_text, None
+                # Add assistant message to the current turn
+                turn_messages.append(clean_msg)
 
-                # Append assistant tool-call message
-                current_messages.append(clean_msg)
+                if not message.get("tool_calls"):
+                    final_text = content.strip() if content else "..."
+                    # Turn complete! Persist the entire turn to permanent history
+                    self.history.extend(turn_messages)
+                    return final_text, None
                 
                 # Execute each tool call and append tool result
                 for tool_call in message["tool_calls"]:
@@ -227,11 +229,11 @@ Always prioritize clarity and correctness."""
                         result = goku_tools.execute_tool(func_name, func_args)
                     
                     # Tool response must be role: tool
-                    current_messages.append({
+                    turn_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],
                         "name": func_name,
-                        "content": str(result)
+                        "content": str(result) if result else "Tool execution produced no output."
                     })
                     
                     if status_obj:
