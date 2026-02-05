@@ -16,3 +16,5 @@ passlib[bcrypt]
 textual
 rich
 typer
+websockets
+httpx

@@ -74,7 +74,7 @@ If you've discovered this project on GitHub and want to use it or contribute, fo
 ```bash
 # Clone the repository
 git clone https://github.com/elvisthebuilder/goku.git
-cd goku-terminal-agent
+cd goku && cd goku-terminal-agent
 
 # Start the full backend stack
 docker-compose up -d

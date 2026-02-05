@@ -8,6 +8,8 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    volumes:
+      - ./.env:/app/.env
     depends_on:
       - db
       - redis
@@ -28,13 +30,14 @@ services:
       - goku-network
 
   db:
-    image: postgres:15-alphine
+    image: postgres:15-alpine
+    restart: always
     environment:
       POSTGRES_USER: ${DB_USER:-goku}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-goku_pass}
       POSTGRES_DB: ${DB_NAME:-goku_db}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:

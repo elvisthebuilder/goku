@@ -215,34 +215,54 @@ class GokuEngine:
             "-m", str(config.MODEL_PATH),
             "-p", f"{self.SYSTEM_PROMPT}\nUser: {prompt}\nAssistant:",
             "-n", "512",
-            "--ctx-size", "2048",
-            "--log-disable",  # Suppress banner and logs
-            "--no-display-prompt" # Don't repeat the prompt in stdout
+            "--ctx-size", "2048"
         ]
         
         try:
+            # We remove --log-disable as it sometimes causes "invalid argument: -q" on custom builds
+            # and instead rely on aggressive manual filtering of stdout/stderr.
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             output = result.stdout.strip()
             
-            # If stdout is empty but stderr has info, it might be an error or unexpected output
-            if not output and result.stderr:
-                # Filter out stats and banner from stderr if it leaked there
-                err = result.stderr
-                if "Assistant:" in err:
-                    output = err.split("Assistant:")[-1].strip()
+            # Combine stdout and stderr for filtering as banners can leak to either
+            full_output = (result.stdout + "\n" + result.stderr).strip()
             
-            # Extreme cleanup: Some builds echo the prompt regardless of flags
+            # If stdout is empty but we have content in stderr (like "Assistant: ...")
+            if not output and "Assistant:" in full_output:
+                output = full_output
+            
+            # 1. Extreme cleanup: Extract only what follows the final "Assistant:" marker
             if "Assistant:" in output:
                 output = output.split("Assistant:")[-1].strip()
             
-            # Strip any remaining prompt fragments or metadata
+            # 2. Filter out llama.cpp generic banners (multi-line)
+            output = re.sub(r"build\s*:\s*.*?\n", "", output)
+            output = re.sub(r"model\s*:\s*.*?\n", "", output)
+            output = re.sub(r"modalities\s*:\s*.*?\n", "", output)
+            output = re.sub(r"system_info\s*:\s*.*?\n", "", output)
+            
+            # 3. Strip prompt/generation stats usually enclosed in brackets
             output = re.sub(r"\[ Prompt: .*? \]", "", output)
             output = re.sub(r"\[ Generation: .*? \]", "", output)
+            
+            # 4. Strip persona fragments if model echoed them
             output = re.sub(r"> You are Goku.*?\n", "", output, flags=re.DOTALL)
+            output = re.sub(r"### PERSONA:.*?\n", "", output, flags=re.DOTALL)
+            output = re.sub(r"### CRITICAL RULES:.*?\n", "", output, flags=re.DOTALL)
             
             return output.strip()
         except subprocess.CalledProcessError as e:
-            raise Exception(f"Offline error: {e.stderr}")
+            # If it still fails, it might be a real error or the "invalid argument"
+            err_msg = e.stderr.strip()
+            if "invalid argument" in err_msg:
+                 # Fallback attempt: basic invocation if flags are the issue
+                 try:
+                     fallback_cmd = [str(config.LLAMA_CPP_BIN), "-m", str(config.MODEL_PATH), "-p", prompt, "-n", "128"]
+                     res = subprocess.run(fallback_cmd, capture_output=True, text=True)
+                     return res.stdout.strip()
+                 except:
+                     pass
+            raise Exception(f"Offline error: {err_msg}")
 
     SYSTEM_PROMPT = """You are Goku, a powerful AI Coding Assistant.
 
