@@ -34,7 +34,7 @@ PROVIDERS = {
         "token_env": "OLLAMA_API_KEY"
     },
     "github": {
-        "url": "https://models.inference.ai.azure.com/chat/completions",
+        "url": "https://models.github.ai/inference/chat/completions",
         "model": "gpt-4o",
         "token_env": "GITHUB_TOKEN"
     },
