@@ -29,16 +29,23 @@ PROVIDERS = {
         "token_env": "ANTHROPIC_API_KEY"
     },
     "ollama": {
-        "url": "http://localhost:11434/v1/chat/completions",
-        "model": "qwen2.5-coder:7b",
-        "token_env": None
+        "url": "https://ollama.com/api/generate",
+        "model": "qwen3-coder:480b",
+        "token_env": "OLLAMA_API_KEY"
     },
     "github": {
         "url": "https://models.inference.ai.azure.com/chat/completions",
         "model": "gpt-4o",
         "token_env": "GITHUB_TOKEN"
+    },
+    "gemini": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "model": "gemini-1.5-flash",
+        "token_env": "GEMINI_API_KEY"
     }
 }
+
+
 
 DEFAULT_PROVIDER = "huggingface"
 
@@ -97,17 +104,116 @@ def save_token(token, provider=None):
     cfg["tokens"] = tokens
     save_config(cfg)
 
+def save_url(url, provider=None):
+    if not provider:
+        provider = get_active_provider()
+    
+    cfg = load_config()
+    urls = cfg.get("urls", {})
+    urls[provider] = url
+    cfg["urls"] = urls
+    save_config(cfg)
+    
+    # Update current session
+    if provider in PROVIDERS:
+        PROVIDERS[provider]["url"] = url
+
+def save_model(model, provider=None):
+    if not provider:
+        provider = get_active_provider()
+    
+    cfg = load_config()
+    models = cfg.get("models", {})
+    models[provider] = model
+    cfg["models"] = models
+    save_config(cfg)
+    
+    # Update current session
+    if provider in PROVIDERS:
+        PROVIDERS[provider]["model"] = model
+
 # Backward compatibility
+# Load saved configuration overrides
+_cfg = load_config()
+_saved_models = _cfg.get("models", {})
+for _p, _m in _saved_models.items():
+    if _p in PROVIDERS:
+        PROVIDERS[_p]["model"] = _m
+
+_saved_urls = _cfg.get("urls", {})
+for _p, _u in _saved_urls.items():
+    if _p in PROVIDERS:
+        PROVIDERS[_p]["url"] = _u
+
 HF_TOKEN = get_token("huggingface")
 DEFAULT_HF_MODEL = PROVIDERS["huggingface"]["model"]
 
+# Search Providers
+SEARCH_PROVIDERS = {
+    "brave": {
+        "token_env": "BRAVE_API_KEY",
+        "description": "Brave Search API"
+    },
+    "google": {
+        "token_env": "GOOGLE_API_KEY", 
+        "description": "Google Custom Search API"
+    },
+    "bing": {
+        "token_env": "BING_SUBSCRIPTION_KEY",
+        "description": "Bing Web Search API"
+    },
+    "duckduckgo": {
+        "token_env": None,
+        "description": "DuckDuckGo (No key required)"
+    }
+}
+DEFAULT_SEARCH_PROVIDER = "brave"
+
+def get_active_search_provider():
+    return load_config().get("active_search_provider", DEFAULT_SEARCH_PROVIDER)
+
+def set_active_search_provider(name):
+    if name in SEARCH_PROVIDERS:
+        cfg = load_config()
+        cfg["active_search_provider"] = name
+        save_config(cfg)
+        return True
+    return False
+
+def get_search_token(provider=None):
+    if not provider:
+        provider = get_active_search_provider()
+        
+    cfg = load_config()
+    tokens = cfg.get("tokens", {})
+    if provider in tokens:
+        return tokens[provider]
+        
+    # Check env var
+    env_var = SEARCH_PROVIDERS.get(provider, {}).get("token_env")
+    if env_var:
+        return os.getenv(env_var)
+    return None
+
+def get_brave_key():
+    return get_search_token("brave")
+
 def load_mcp_servers():
     """Load MCP server configurations."""
+    
+    # Determine server path: Check local dev first, then installed path
+    script_dir = Path(__file__).parent.parent # goku/config.py -> goku/
+    dev_server_path = script_dir / "servers" / "internet.py"
+    
+    final_server_path = os.path.join(str(GOKU_DIR), "goku/servers/internet.py")
+    if dev_server_path.exists():
+        final_server_path = str(dev_server_path)
+
     defaults = {
         "internet": {
             "command": "python3",
-            "args": [os.path.join(str(GOKU_DIR), "goku/servers/internet.py")],
-            "env": {"PYTHONPATH": str(GOKU_DIR)}
+            "args": [final_server_path],
+            "env": {"PYTHONPATH": str(script_dir.parent)} # Point to repo root
         }
     }
     
@@ -170,3 +276,4 @@ MODEL_PATH = MODELS_DIR / "qwen2.5-1.5b-instruct-q4_k_m.gguf"
 
 # Settings
 SESSION_MEMORY_MAX = 10
+SHOW_THOUGHTS = True

@@ -37,6 +37,14 @@ class GokuEngine:
                 self.mcp_tools.extend(tools)
                 # ui.console.print(f"[dim]Connected to MCP server: {name}[/dim]")
 
+    async def close(self):
+        """Disconnect from all MCP servers."""
+        for client in self.mcp_clients.values():
+            try:
+                await client.close()
+            except Exception:
+                pass
+
     def set_mode(self, mode):
         if mode in ["online", "offline"]:
             self.mode = mode
@@ -45,6 +53,89 @@ class GokuEngine:
 
     def clear_history(self):
         self.history = []
+
+    def list_models(self):
+        """Fetch available models from the active provider."""
+        provider_name = config.get_active_provider()
+        provider_cfg = config.PROVIDERS.get(provider_name, config.PROVIDERS[config.DEFAULT_PROVIDER])
+        
+        # Determine models endpoint
+        if provider_name == "anthropic":
+            return ["claude-3-5-sonnet-20240620", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
+        
+        if provider_name == "ollama":
+            # If it's a known ollama endpoint like /api/generate, use /api/tags
+            if "api/generate" in provider_cfg["url"]:
+                base_url = provider_cfg["url"].split("/api/generate")[0]
+                url = f"{base_url}/api/tags"
+            elif "v1" in provider_cfg["url"]:
+                base_url = provider_cfg["url"].split("/v1")[0]
+                url = f"{base_url}/api/tags" # Fallback to native for better listing
+            else:
+                url = f"{provider_cfg['url'].rsplit('/', 1)[0]}/tags"
+        else:
+            base_url = provider_cfg["url"].rsplit("/", 2)[0] # remove /chat/completions
+            url = f"{base_url}/models"
+        token = config.get_token(provider_name)
+        
+        headers = {"Content-Type": "application/json"}
+        if token:
+             headers["Authorization"] = f"Bearer {token}"
+        
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 401:
+                return [f"Error: Unauthorized (401). Please check your API key for {provider_name}."]
+            if response.status_code == 404:
+                return [f"Error: Models endpoint not found (404). The provider {provider_name} may not support listing models at this URL."]
+            
+            response.raise_for_status()
+            data = response.json()
+            # OpenAI format: {"data": [{"id": "model-name", ...}]}
+            if "data" in data and isinstance(data["data"], list):
+                models = [m["id"] for m in data["data"]]
+                return sorted(models)
+            # Ollama (tags) format fallback: {"models": [{"name": "...", ...}]}
+            if "models" in data and isinstance(data["models"], list):
+                models = [m.get("name") or m.get("id") for m in data["models"]]
+                return sorted(filter(None, models))
+                
+            return []
+        except Exception as e:
+            return [f"Error fetching models: {e}"]
+
+    def _get_langchain_prompt(self, messages, all_tools):
+        from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+        
+        # Serialize tools for the model to see
+        tools_instruction = ""
+        if all_tools:
+            tools_instruction = "\n\nAVAILABLE TOOLS:\n"
+            for t in all_tools:
+                tools_instruction += f"- {t['function']['name']}: {t['function']['description']}\n"
+                tools_instruction += f"  Args: {json.dumps(t['function']['parameters'])}\n"
+            tools_instruction += "\nTo use a tool, output a single JSON LIST in your message: [{\"id\": \"call_1\", \"function\": {\"name\": \"tool_name\", \"arguments\": {\"arg\": \"val\"}}}]\n"
+            tools_instruction += "Only use the tools listed above. If no tool is needed, respond with normal text.\n"
+
+        lc_messages = []
+        system_injected = False
+        
+        for m in messages:
+            role = m['role'].lower()
+            content = m['content']
+            
+            if role == "system":
+                lc_messages.append(SystemMessage(content=content + tools_instruction))
+                system_injected = True
+            elif role == "user":
+                lc_messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                lc_messages.append(AIMessage(content=content))
+                
+        if not system_injected:
+            lc_messages.insert(0, SystemMessage(content=self.SYSTEM_PROMPT + tools_instruction))
+            
+        return lc_messages
 
     def _get_online_response(self, messages):
         provider_name = config.get_active_provider()
@@ -64,10 +155,22 @@ class GokuEngine:
         # Merge native tools with MCP tools
         all_tools = goku_tools.TOOLS_SCHEMA + self.mcp_tools
         
-        # Handle different payload formats
+        # Use LangChain for message structuring
+        lc_messages = self._get_langchain_prompt(messages, all_tools)
+
+        # Handle different payload formats (still need raw HTTP for now to avoid bulky LC provider installs)
         if provider_name == "anthropic":
             # Anthropic Messages API format
-            anthropic_messages, system_msg = self._convert_messages_to_anthropic(messages)
+            anthropic_messages = []
+            system_msg = ""
+            for msg in lc_messages:
+                if msg.type == "system":
+                    system_msg += msg.content
+                elif msg.type == "human":
+                    anthropic_messages.append({"role": "user", "content": msg.content})
+                elif msg.type == "ai":
+                    anthropic_messages.append({"role": "assistant", "content": msg.content})
+            
             payload = {
                 "model": provider_cfg["model"],
                 "max_tokens": 2048,
@@ -75,11 +178,30 @@ class GokuEngine:
                 "system": system_msg,
                 "tools": self._convert_tools_to_anthropic(all_tools) if all_tools else None,
             }
-        else:
-            # OpenAI / HF / GitHub / Ollama format
+        elif "api/generate" in provider_cfg["url"]:
+            # Ollama /api/generate format (Raw completion)
+            prompt = ""
+            for msg in lc_messages:
+                role = "system" if msg.type == "system" else "user" if msg.type == "human" else "assistant"
+                prompt += f"<|im_start|>{role}\n{msg.content}<|im_end|>\n"
+            prompt += "<|im_start|>assistant\n"
+            
             payload = {
                 "model": provider_cfg["model"],
-                "messages": messages,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"num_ctx": 4096}
+            }
+        else:
+            # OpenAI / Chat format
+            raw_messages = []
+            for msg in lc_messages:
+                role = "system" if msg.type == "system" else "user" if msg.type == "human" else "assistant"
+                raw_messages.append({"role": role, "content": msg.content})
+                
+            payload = {
+                "model": provider_cfg["model"],
+                "messages": raw_messages,
                 "max_tokens": 2048,
                 "tools": all_tools if all_tools else None,
                 "tool_choice": "auto" if all_tools else None,
@@ -94,6 +216,19 @@ class GokuEngine:
             # Normalize response format
             if provider_name == "anthropic":
                 return self._normalize_anthropic_response(res_data)
+            
+            # Normalize Ollama /api/generate response
+            if "response" in res_data and "done" in res_data:
+                 return {
+                    "choices": [{
+                        "message": {
+                            "role": "assistant",
+                            "content": res_data["response"],
+                            "tool_calls": None
+                        }
+                    }]
+                }
+            
             return res_data
             
         except requests.exceptions.HTTPError as e:
@@ -107,69 +242,11 @@ class GokuEngine:
         except Exception as e:
             raise Exception(f"Online API error ({provider_name}): {str(e)}")
 
-    def _convert_messages_to_anthropic(self, messages):
-        """Convert OpenAI standard messages to Anthropic's specific format."""
-        anthropic_messages = []
-        system_msg = None
-        
-        for m in messages:
-            role = m["role"]
-            content = m.get("content", "")
-            
-            if role == "system":
-                system_msg = content
-            elif role == "user":
-                anthropic_messages.append({"role": "user", "content": content})
-            elif role == "assistant":
-                # Convert tool_calls if present
-                if "tool_calls" in m:
-                    anthropic_content = []
-                    if content and content != "...":
-                        anthropic_content.append({"type": "text", "text": content})
-                    
-                    for tc in m["tool_calls"]:
-                        anthropic_content.append({
-                            "type": "tool_use",
-                            "id": tc["id"],
-                            "name": tc["function"]["name"],
-                            "input": json.loads(tc["function"]["arguments"])
-                        })
-                    anthropic_messages.append({"role": "assistant", "content": anthropic_content})
-                else:
-                    anthropic_messages.append({"role": "assistant", "content": content})
-            elif role == "tool":
-                # Anthropic groups tool results into a USER message following the assistant's tool_use
-                # If the previous message was a user message and had tool_results, append to it.
-                # Otherwise, create a new user message.
-                result_block = {
-                    "type": "tool_result",
-                    "tool_use_id": m["tool_call_id"],
-                    "content": content
-                }
-                
-                if anthropic_messages and anthropic_messages[-1]["role"] == "user" and isinstance(anthropic_messages[-1]["content"], list):
-                     anthropic_messages[-1]["content"].append(result_block)
-                else:
-                     anthropic_messages.append({"role": "user", "content": [result_block]})
-                     
-        return anthropic_messages, system_msg
-
-    def _convert_tools_to_anthropic(self, tools):
-        """Convert OpenAI tool schema to Anthropic tool schema."""
-        anthropic_tools = []
-        for t in tools:
-            if t["type"] == "function":
-                f = t["function"]
-                anthropic_tools.append({
-                    "name": f["name"],
-                    "description": f["description"],
-                    "input_schema": f["parameters"]
-                })
-        return anthropic_tools
-
     def _normalize_anthropic_response(self, data):
         """Convert Anthropic response to OpenAI-compatible format."""
-        # data["content"] is a list of blocks
+        if not data or "content" not in data:
+            return {"choices": [{"message": {"role": "assistant", "content": "...", "tool_calls": None}}]}
+            
         text_content = ""
         tool_calls = []
         
@@ -264,19 +341,26 @@ class GokuEngine:
                      pass
             raise Exception(f"Offline error: {err_msg}")
 
-    SYSTEM_PROMPT = """You are Goku, a powerful AI Coding Assistant.
+    SYSTEM_PROMPT = """You are Goku, a powerful and friendly AI Coding Assistant.
 
 ### PERSONA:
-You are an expert software engineer and helpful friend. You write clean, modular, and documented code.
+You are an expert software engineer and a helpful companion. You write clean, modular, and documented code.
 You are capable of full-stack development, debugging, and system administration.
+You should be conversational: if a request is ambiguous or you're unsure of the goal, ask for clarification.
+If the request is clear and actionable (e.g., "Search for X", "Check file Y", "Execute command Z"), proceed directly and efficiently using your tools.
 
 ### CRITICAL RULES:
-1. **Explore**: Use tools to understand the codebase.
-2. **Plan**: Explain your approach before editing.
-3. **Edit**: Use provided tools for all file operations.
-4. **Interact**: Be concise. NEVER output raw function/tool tags or JSON in your response text. Use the official tool-calling API.
+1. **Explore & Execute**: Use tools to understand the codebase and perform tasks. If a task requires external info or file ops, YOU MUST USE A TOOL.
+2. **Conversational Balance**: Be direct for explicit commands. Be inquisitive for vague requests.
+3. **Explicit Paths**: Always state the *full absolute path* of any file you are about to read, write, or search.
+4. **User Consent**: Ask the user before creating new files or directories: "I'm about to create a file at [path], is that okay?"
+5. **Interact**: Be concise. NEVER output raw function/tool tags or JSON in your response text.
 
-Always prioritize clarity and correctness. No preamble, just results or tool calls.
+### REASONING & CHAIN-OF-THOUGHT:
+- **FORCED REASONING**: BEFORE you take any action or provide a final answer, you MUST enclose your internal reasoning inside <thought> tags.
+- Within <thought>, analyze the intent, evaluate the plan, and outline the tool calls.
+
+Always prioritize clarity and correctness.
 """
 
     async def generate_async(self, prompt, status_obj=None):
@@ -306,8 +390,12 @@ Always prioritize clarity and correctness. No preamble, just results or tool cal
             
             # Prepare this turn's ongoing messages (not yet in permanent history)
             turn_messages = []
+            steps_taken = 0
+            MAX_STEPS = 10
             
-            while True:
+            while steps_taken < MAX_STEPS:
+                steps_taken += 1
+
                 # Construct combined messages for the API call
                 api_messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
                 api_messages += self.history[-config.SESSION_MEMORY_MAX:]
@@ -332,6 +420,11 @@ Always prioritize clarity and correctness. No preamble, just results or tool cal
                             thought = match.group(1).strip()
                             content = content.replace(match.group(0), "").strip()
                             break
+                
+                # Update UI with thought if present
+                from . import ui
+                if thought and status_obj:
+                    ui.show_thought(status_obj, thought)
 
                 # Strip internal function calls from text (sometimes models echo them)
                 if content:
@@ -347,13 +440,86 @@ Always prioritize clarity and correctness. No preamble, just results or tool cal
                 # IMPORTANT: Ensure content is never truly empty for the assistant
                 message["content"] = content if content else "..."
                 
+                # REPAIR: Autoset tool_calls from XML or JSON if native tools failed (common in some open models)
+                if not message.get("tool_calls"):
+                     import re
+                     
+                     from . import ui
+                     content_to_scan = message["content"]
+                     
+                     code_block_match = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", content_to_scan, re.DOTALL)
+                     if code_block_match:
+                         json_match = code_block_match
+                     else:
+                         # Fallback: Capture any JSON array that looks like it has objects
+                         json_match = re.search(r'\[\s*\{.*?\}\s*\]', content_to_scan, re.DOTALL)
+                     
+                     if json_match:
+                         try:
+                             potential_json = json_match.group(0)
+                             inferred_calls = json.loads(potential_json)
+                             if isinstance(inferred_calls, list):
+                                 normalized_calls = []
+                                 for call in inferred_calls:
+                                     if isinstance(call, dict) and "name" in call and "arguments" in call:
+                                         normalized_calls.append({
+                                             "id": call.get("id", f"call_{len(normalized_calls)}"),
+                                             "type": "function",
+                                             "function": {
+                                                 "name": call["name"],
+                                                 "arguments": json.dumps(call["arguments"]) if isinstance(call["arguments"], (dict, list)) else str(call["arguments"])
+                                             }
+                                         })
+                                     elif isinstance(call, dict) and "function" in call:
+                                         normalized_calls.append(call)
+                                 message["tool_calls"] = normalized_calls if normalized_calls else None
+                                 # Strip the JSON from content
+                                 message["content"] = message["content"].replace(potential_json, "").strip()
+                                 if not message["content"]: message["content"] = "..."
+                         except:
+                             pass # JSON parse failed, fall through to XML check
+
+                     # 2. Try XML format if JSON failed
+                     if not message.get("tool_calls") and "<" in message["content"]:
+                         # Regex for self-closing XML tool tags: <tool_name arg1="val1" ... />
+                         # We'll use a more robust regex that handles newlines and attributes
+                         xml_tools = re.findall(r'<(\w+)\s+([^>]*?)/>', message["content"], re.DOTALL)
+                         if xml_tools:
+                             inferred_calls = []
+                             for name, args_str in xml_tools:
+                                 # Parse attributes: key="value"
+                                 args = {}
+                                 for key, val in re.findall(r'(\w+)="([^"]*)"', args_str):
+                                     args[key] = val
+                                 
+                                 # Map to schema if possible, or just pass as is
+                                 inferred_calls.append({
+                                     "id": f"call_{len(inferred_calls)}",
+                                     "type": "function",
+                                     "function": {
+                                         "name": name,
+                                         "arguments": json.dumps(args)
+                                     }
+                                 })
+                             
+                             if inferred_calls:
+                                 # Strip the XML tags from content so user doesn't see them as text
+                                 for name, args_str in xml_tools:
+                                     message["content"] = message["content"].replace(f"<{name} {args_str}/>", "").strip()
+                                 
+                                 # Strip common model hallucinated interruption messages
+                                 message["content"] = message["content"].replace("[Response interrupted by a tool use result. Only one tool may be used at a time and should be placed at the end of the message.]", "").strip()
+                                 
+                                 if not message["content"]: message["content"] = "..."
+                                 message["tool_calls"] = inferred_calls
+                
                 # Standardize assistant message
                 clean_msg = {
                     "role": "assistant",
                     "content": message["content"]
                 }
                 
-                if "tool_calls" in message:
+                if message.get("tool_calls"):
                     # REPAIR: Fix misinterpreted tool calls (e.g. Router concatenates name and args)
                     fixed_tool_calls = []
                     for tc in message["tool_calls"]:
@@ -387,8 +553,11 @@ Always prioritize clarity and correctness. No preamble, just results or tool cal
                     func_name = tool_call["function"]["name"]
                     # Handle potential malformed arguments
                     try:
-                        args_str = tool_call["function"].get("arguments", "{}")
-                        func_args = json.loads(args_str) if args_str else {}
+                        args_obj = tool_call["function"].get("arguments", "{}")
+                        if isinstance(args_obj, dict):
+                            func_args = args_obj
+                        else:
+                            func_args = json.loads(args_obj) if args_obj else {}
                     except json.JSONDecodeError:
                         func_args = {}
                     
@@ -421,6 +590,8 @@ Always prioritize clarity and correctness. No preamble, just results or tool cal
                     if status_obj:
                         status_obj.start()
                         status_obj.update("[bold green]Thinking...")
+
+            return "Error: Maximum task steps reached. The task may be too complex or got stuck in a loop.", None
 
         except Exception as e:
             return None, str(e)

@@ -36,15 +36,15 @@ if [ -n "$PREFIX" ]; then
     pkg install -y python-requests python-rich rust binutils clang make 2>/dev/null
     
     # Install core dependencies first
-    pip install requests rich duckduckgo-search --break-system-packages
+    python3 -m pip install requests rich duckduckgo-search prompt_toolkit langchain langchain-community --break-system-packages
     
     # Try mcp separately as it often fails to build on Termux
     echo "Attempting to install MCP (optional)..."
-    pip install mcp --break-system-packages 2>/dev/null || echo "⚠️  MCP installation skipped (build issue). Goku will use native tools."
+    python3 -m pip install mcp --break-system-packages 2>/dev/null || echo "⚠️  MCP installation skipped (build issue). Goku will use native tools."
 else
     # Standard Linux
-    pip install requests rich duckduckgo-search --break-system-packages 2>/dev/null || pip install requests rich duckduckgo-search
-    pip install mcp --break-system-packages 2>/dev/null || pip install mcp 2>/dev/null
+    python3 -m pip install requests rich duckduckgo-search prompt_toolkit langchain langchain-community --break-system-packages 2>/dev/null || python3 -m pip install requests rich duckduckgo-search prompt_toolkit langchain langchain-community
+    python3 -m pip install mcp --break-system-packages 2>/dev/null || python3 -m pip install mcp 2>/dev/null
 fi
 
 # Create the goku command
@@ -52,7 +52,7 @@ echo "Creating executable..."
 cat > "$PREFIX_BIN/goku" <<EOF
 #!/bin/bash
 export PYTHONPATH="\$HOME/.goku:\$PYTHONPATH"
-python3 -m goku.cli "\$@"
+/usr/bin/python3 -m goku.cli "\$@"
 EOF
 
 chmod +x "$PREFIX_BIN/goku"

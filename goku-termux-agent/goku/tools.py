@@ -98,19 +98,31 @@ def search_code(directory, query):
         return f"Error searching code: {e}"
 
 def search_web(query):
-    """Searches the web using DuckDuckGo."""
+    """Searches the web using the active search provider (Brave, Google, Bing, or DuckDuckGo)."""
     try:
-        from duckduckgo_search import DDGS
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=5))
-            if not results:
-                return "No results found."
-            formatted = []
-            for r in results:
-                formatted.append(f"Title: {r['title']}\nLink: {r['href']}\nSnippet: {r['body']}\n---")
-            return "\n".join(formatted)
-    except ImportError:
-        return "Error: duckduckgo-search not installed. Run 'pip install duckduckgo-search'."
+        from . import config
+        active_provider = config.get_active_search_provider()
+        
+        if active_provider == "duckduckgo":
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                from duckduckgo_search import DDGS
+                with DDGS() as ddgs:
+                    results = list(ddgs.text(query, max_results=5))
+                    if not results:
+                        return "No results found."
+                    formatted = []
+                    for r in results:
+                        formatted.append(f"Title: {r['title']}\nLink: {r['href']}\nSnippet: {r['body']}\n---")
+                    return "\n".join(formatted)
+        
+        # For other providers, we'll use the logic already in internet.py or similar
+        # To avoid circular imports, we'll just check if it's Brave/Google/Bing and return a message
+        # or mejor: implement a unified search function in a new module. 
+        # For now, let's keep it simple: if it's not DDG, guide the model to use the MCP tool.
+        return f"Please use the 'internet__search_web' tool for {active_provider} search. I am the legacy DuckDuckGo tool."
+
     except Exception as e:
         return f"Error searching web: {e}"
 

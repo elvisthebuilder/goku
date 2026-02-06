@@ -17,9 +17,12 @@ def print_help():
     [bold yellow]Available Commands:[/bold yellow]
     - [cyan]/mode [online|offline][/cyan] : Switch between API and Local modes
     - [cyan]/online[/cyan] / [cyan]/offline[/cyan]      : Shortcuts to switch online/offline
-    - [cyan]/provider [name][/cyan]        : List or switch AI providers (openai, anthropic, etc.)
+    - [cyan]/provider [name][/cyan]        : List or switch AI providers
+    - [cyan]/url <url>[/cyan]           : Set custom API URL for current provider
+    - [cyan]/search [provider][/cyan]        : List or switch search providers
     - [cyan]/token [provider] <key>[/cyan] : Save an API token (defaults to current provider)
     - [cyan]/model <name>[/cyan]           : Change the active model for current provider
+    - [cyan]/models[/cyan]                  : List available models for the active provider
     - [cyan]/setup[/cyan]                  : Install offline support (llama.cpp)
     - [cyan]/update[/cyan]                 : Update Goku to the latest version
     - [cyan]/clear[/cyan]                  : Clear session history
@@ -41,8 +44,60 @@ def show_assistant_response(text):
     md = Markdown(text)
     console.print(Panel(md, title="Goku", border_style="green"))
 
+# Persistent session for chat history
+_chat_session = None
+
+def _get_chat_session():
+    global _chat_session
+    if _chat_session is None:
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.history import InMemoryHistory
+        _chat_session = PromptSession(history=InMemoryHistory())
+    return _chat_session
+
+async def get_user_input_async():
+    """Async input that supports cursor directions, history, and more via prompt_toolkit."""
+    from prompt_toolkit.styles import Style
+    from prompt_toolkit.patch_stdout import patch_stdout
+    
+    # Simple style to match our current UI
+    style = Style.from_dict({
+        'prompt': 'bold #3b82f6', # blue
+    })
+    
+    session = _get_chat_session()
+    
+    try:
+        # Use patch_stdout so ui.console.print calls from other tasks (like status) work
+        with patch_stdout():
+            result = await session.prompt_async("You: ", style=style)
+            return result.strip()
+    except EOFError:
+        return "/exit"
+    except KeyboardInterrupt:
+        return ""
+
+async def ask_async(message, style_name='prompt'):
+    """Generic async prompt helper using the persistent session."""
+    from prompt_toolkit.styles import Style
+    from prompt_toolkit.patch_stdout import patch_stdout
+    
+    style = Style.from_dict({
+        'prompt': 'bold #eab308', # yellow
+    })
+    
+    session = _get_chat_session()
+    
+    try:
+        with patch_stdout():
+            # Use HTML/formatted message if desired, or just raw string
+            result = await session.prompt_async(message, style=style)
+            return result.strip()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
 def get_user_input():
-    # Use Prompt which prevents editing the prefix
+    """Legacy sync wrapper (not used by main loop anymore)"""
     from rich.prompt import Prompt
     return Prompt.ask("[bold blue]You[/bold blue]")
 
@@ -52,36 +107,92 @@ from rich.columns import Columns
 # Store the last thought to display it as a collapsible panel
 last_thought = {"text": "", "shown": False}
 
-def show_loading():
-    return console.status("[bold green]Thinking...", spinner="dots")
+from . import config
 
-def show_thought(status, thought):
-    """Display thought in the status temporarily, and save it for later permanent display"""
-    global last_thought
-    if not thought.strip():
-        return
-    # Truncate thought if it's too long for status line
-    clean_thought = thought.strip()
-    display_thought = clean_thought[:100] + "..." if len(clean_thought) > 100 else clean_thought
-    status.update(f"[dim]💭 {display_thought}[/dim]\n[bold green]Formulating response...")
+from rich.console import Group
+from rich.spinner import Spinner
+from collections import deque
+
+class ThoughtStream:
+    """
+    Manages a live stream of thought lines that fades/scrolls (rolling window).
+    Uses a Live display to show transient thoughts + spinner.
+    """
+    def __init__(self, max_height=5):
+        self.max_height = max_height
+        self.lines = deque(maxlen=max_height)
+        self.live = None
+        self.spinner = Spinner("dots", text="[bold green]Thinking...[/bold green]")
     
-    # Save full thought for display after response
-    last_thought = {"text": clean_thought, "shown": False}
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+
+    def start(self):
+        # transient=True ensures it disappears when done!
+        self.live = Live(self.get_renderable(), console=console, refresh_per_second=12, transient=True)
+        self.live.start()
+
+    def stop(self):
+        if self.live:
+            self.live.stop()
+            self.live = None
+
+    def update(self, text):
+        if not text: return
+        
+        # Smart handling: If it's a status update (contains "Thinking"), update spinner text
+        # Otherwise, treat it as a thought line
+        if "Thinking..." in text:
+             self.spinner.text = text
+        else:
+             # Add new text to our rolling buffer
+             for line in text.split('\n'):
+                 if line.strip():
+                     self.lines.append(line.strip())
+        
+        if self.live:
+            self.live.update(self.get_renderable())
+
+    def get_renderable(self):
+        # Create text block from lines with fading opacity look (simulated via dims)
+        text_group = Text()
+        
+        # Render past lines (dimmed)
+        for i, line in enumerate(list(self.lines)):
+            # Last line is bright, previous are dim
+            style = "italic blue" if i == len(self.lines) - 1 else "dim blue"
+            text_group.append(f"🧠 {line}\n", style=style)
+            
+        return Group(
+            text_group,
+            self.spinner
+        )
+
+# Global stream instance for ease of use
+_current_stream = None
+
+def show_loading():
+    """Returns a ThoughtStream context manager."""
+    return ThoughtStream(max_height=6)
+
+def show_thought(status_obj, thought):
+    """Update the active ThoughtStream if available."""
+    if not config.SHOW_THOUGHTS:
+        return
+        
+    # Check if status_obj is actually our ThoughtStream
+    if isinstance(status_obj, ThoughtStream):
+        status_obj.update(thought)
+    elif hasattr(status_obj, "update"):
+        # Fallback for standard Rich Status (legacy support)
+        status_obj.update(f"[italic blue]🧠 {thought}[/italic blue]\n[bold green]Thinking...")
 
 def show_thought_panel():
-    """Display the saved thought as a collapsible panel after the response"""
-    global last_thought
-    if last_thought["text"] and not last_thought["shown"]:
-        # Create a collapsible-looking panel
-        thought_text = last_thought["text"]
-        console.print(Panel(
-            f"[dim]{thought_text}[/dim]",
-            title="💭 Thought Process",
-            border_style="dim",
-            padding=(0, 1),
-            expand=False
-        ))
-        last_thought["shown"] = True
+    pass
 
 def show_tool_execution(tool_name, args):
     console.print(f"[bold cyan]🔧 Executing: {tool_name}[/bold cyan] [dim]{json.dumps(args)}[/dim]")

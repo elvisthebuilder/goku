@@ -1,2 +1,7 @@
 requests
 rich
+duckduckgo-search
+mcp
+prompt_toolkit
+langchain
+langchain-community
